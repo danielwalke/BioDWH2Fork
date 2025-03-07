@@ -93,6 +93,7 @@
         <module>biodwh2-iptmnet</module>
         <module>biodwh2-edk</module>
         <module>biodwh2-swisslipids</module>
+        <module>biodwh2-lmsd</module>
     </modules>
 
     <packaging>pom</packaging>
