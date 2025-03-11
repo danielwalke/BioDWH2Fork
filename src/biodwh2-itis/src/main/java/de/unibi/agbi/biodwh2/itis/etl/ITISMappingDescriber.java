@@ -4,6 +4,7 @@ import de.unibi.agbi.biodwh2.core.DataSource;
 import de.unibi.agbi.biodwh2.core.etl.MappingDescriber;
 import de.unibi.agbi.biodwh2.core.model.IdentifierType;
 import de.unibi.agbi.biodwh2.core.model.graph.*;
+import de.unibi.agbi.biodwh2.core.model.graph.mapping.TaxonNodeMappingDescription;
 
 public class ITISMappingDescriber extends MappingDescriber {
     public ITISMappingDescriber(final DataSource dataSource) {
@@ -18,7 +19,16 @@ public class ITISMappingDescriber extends MappingDescriber {
     }
 
     private NodeMappingDescription[] describeTaxon(final Node node) {
-        final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.TAXON);
+        final String usage = node.getProperty("usage");
+        if ("invalid".equalsIgnoreCase(usage)) {
+            return null;
+        }
+        final TaxonNodeMappingDescription description = new TaxonNodeMappingDescription();
+        final String nameUsage = node.getProperty("name_usage");
+        if ("valid".equalsIgnoreCase(nameUsage)) {
+            description.addName(node.getProperty("name"));
+            description.addName(node.getProperty("long_name"));
+        }
         description.addIdentifier(IdentifierType.ITIS, node.<Integer>getProperty("id"));
         return new NodeMappingDescription[]{description};
     }

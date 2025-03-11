@@ -152,7 +152,7 @@ public class ITISGraphExporter extends GraphExporter<ITISDataSource> {
             return graph.findNode(SOURCE_LABEL, ID_KEY, documentationId);
         if ("EXP".equals(docIdPrefix))
             return graph.findNode(EXPERT_LABEL, ID_KEY, documentationId);
-        LOGGER.warn("Unknown reference prefix '" + docIdPrefix + "'");
+        LOGGER.warn("Unknown reference prefix '{}'", docIdPrefix);
         return null;
     }
 
@@ -222,7 +222,7 @@ public class ITISGraphExporter extends GraphExporter<ITISDataSource> {
             if (vernacularNodeId != null)
                 graph.addEdge(vernacularNodeId, referenceNode, "HAS_REFERENCE", "tsn", link.tsn);
             else if (!warnedVernacularIds.contains(link.vernacularId)) {
-                LOGGER.warn("Unknown reference to vernacular id '" + link.vernacularId + "'");
+                LOGGER.warn("Unknown reference to vernacular id '{}'", link.vernacularId);
                 warnedVernacularIds.add(link.vernacularId);
             }
         }
