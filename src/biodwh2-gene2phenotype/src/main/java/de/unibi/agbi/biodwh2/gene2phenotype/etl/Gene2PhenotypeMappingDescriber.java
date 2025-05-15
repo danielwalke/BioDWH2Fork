@@ -17,6 +17,8 @@ public class Gene2PhenotypeMappingDescriber extends MappingDescriber {
             return describeGene(node);
         if (Gene2PhenotypeGraphExporter.DISEASE_LABEL.equalsIgnoreCase(localMappingLabel))
             return describeDisease(node);
+        if (Gene2PhenotypeGraphExporter.PHENOTYPE_LABEL.equalsIgnoreCase(localMappingLabel))
+            return describePhenotype(node);
         if (Gene2PhenotypeGraphExporter.PUBLICATION_LABEL.equalsIgnoreCase(localMappingLabel))
             return describePublication(node);
         return null;
@@ -29,10 +31,6 @@ public class Gene2PhenotypeMappingDescriber extends MappingDescriber {
             description.addIdentifier(IdentifierType.HGNC_ID, node.<Integer>getProperty("hgnc_id"));
         if (node.hasProperty("mim"))
             description.addIdentifier(IdentifierType.OMIM, node.<Integer>getProperty("mim"));
-        final String[] previousSymbols = node.getProperty("previous_symbols");
-        if (previousSymbols != null)
-            for (final String symbol : previousSymbols)
-                description.addIdentifier(IdentifierType.HGNC_SYMBOL, symbol);
         return new NodeMappingDescription[]{description};
     }
 
@@ -41,6 +39,15 @@ public class Gene2PhenotypeMappingDescriber extends MappingDescriber {
         description.addName(node.getProperty("name"));
         if (node.hasProperty("mim"))
             description.addIdentifier(IdentifierType.OMIM, node.<Integer>getProperty("mim"));
+        if (node.hasProperty("mondo_id"))
+            description.addIdentifier(IdentifierType.MONDO, node.<String>getProperty("mondo_id"));
+        return new NodeMappingDescription[]{description};
+    }
+
+    private NodeMappingDescription[] describePhenotype(final Node node) {
+        final NodeMappingDescription description = new NodeMappingDescription(
+                NodeMappingDescription.NodeType.PHENOTYPE);
+        description.addIdentifier("HP", node.<String>getProperty("hpo_id"));
         return new NodeMappingDescription[]{description};
     }
 
@@ -60,7 +67,7 @@ public class Gene2PhenotypeMappingDescriber extends MappingDescriber {
     protected String[] getNodeMappingLabels() {
         return new String[]{
                 Gene2PhenotypeGraphExporter.GENE_LABEL, Gene2PhenotypeGraphExporter.DISEASE_LABEL,
-                Gene2PhenotypeGraphExporter.PUBLICATION_LABEL
+                Gene2PhenotypeGraphExporter.PHENOTYPE_LABEL, Gene2PhenotypeGraphExporter.PUBLICATION_LABEL
         };
     }
 

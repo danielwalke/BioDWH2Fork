@@ -1,6 +1,5 @@
 package de.unibi.agbi.biodwh2.gene2phenotype.etl;
 
-import com.fasterxml.jackson.databind.MappingIterator;
 import de.unibi.agbi.biodwh2.core.Workspace;
 import de.unibi.agbi.biodwh2.core.etl.GraphExporter;
 import de.unibi.agbi.biodwh2.core.exceptions.ExporterException;
@@ -9,7 +8,6 @@ import de.unibi.agbi.biodwh2.core.io.FileUtils;
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
 import de.unibi.agbi.biodwh2.core.model.graph.IndexDescription;
 import de.unibi.agbi.biodwh2.core.model.graph.Node;
-import de.unibi.agbi.biodwh2.core.model.graph.NodeBuilder;
 import de.unibi.agbi.biodwh2.gene2phenotype.Gene2PhenotypeDataSource;
 import de.unibi.agbi.biodwh2.gene2phenotype.model.GeneDiseasePair;
 import org.apache.commons.lang3.StringUtils;
@@ -31,15 +29,15 @@ public class Gene2PhenotypeGraphExporter extends GraphExporter<Gene2PhenotypeDat
 
     @Override
     public long getExportVersion() {
-        return 1;
+        return 2;
     }
 
     @Override
     protected boolean exportGraph(final Workspace workspace, final Graph graph) throws ExporterException {
-        graph.addIndex(IndexDescription.forNode(GENE_LABEL, "hgnc_symbol", false, IndexDescription.Type.UNIQUE));
-        graph.addIndex(IndexDescription.forNode(PUBLICATION_LABEL, "pmid", false, IndexDescription.Type.UNIQUE));
-        graph.addIndex(IndexDescription.forNode(PHENOTYPE_LABEL, "hpo_id", false, IndexDescription.Type.UNIQUE));
-        graph.addIndex(IndexDescription.forNode(DISEASE_LABEL, "mim", false, IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(GENE_LABEL, "hgnc_id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(PUBLICATION_LABEL, "pmid", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(PHENOTYPE_LABEL, "hpo_id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(DISEASE_LABEL, "mim", IndexDescription.Type.UNIQUE));
         exportGeneDiseasePairs(workspace, graph);
         return true;
     }
@@ -48,60 +46,65 @@ public class Gene2PhenotypeGraphExporter extends GraphExporter<Gene2PhenotypeDat
         for (final String fileName : Gene2PhenotypeUpdater.FILE_NAMES) {
             if (LOGGER.isInfoEnabled())
                 LOGGER.info("Exporting {}...", fileName);
-            try (final MappingIterator<GeneDiseasePair> iterator = FileUtils.openGzipCsvWithHeader(workspace,
-                                                                                                   dataSource, fileName,
-                                                                                                   GeneDiseasePair.class)) {
-                while (iterator.hasNext())
-                    exportGeneDiseasePair(graph, iterator.next());
-            } catch (IOException e) {
+            try {
+                FileUtils.openGzipCsvWithHeader(workspace, dataSource, fileName, GeneDiseasePair.class,
+                                                (entry) -> exportGeneDiseasePair(graph, entry));
+            } catch (final IOException e) {
                 throw new ExporterFormatException(e);
             }
         }
     }
 
     private void exportGeneDiseasePair(final Graph graph, final GeneDiseasePair association) {
-        final NodeBuilder builder = graph.buildNode().withLabel("Association");
-        builder.withPropertyIfNotNull("confidence_category", association.confidenceCategory);
-        builder.withPropertyIfNotNull("allelic_requirement", association.allelicRequirement);
-        builder.withPropertyIfNotNull("mutation_consequence", association.mutationConsequence);
-        builder.withPropertyIfNotNull("cross_cutting_modifier", association.crossCuttingModifier);
-        builder.withPropertyIfNotNull("mutation_consequence_flag", association.mutationConsequenceFlag);
-        builder.withPropertyIfNotNull("variant_consequence", association.variantConsequence);
-        builder.withPropertyIfNotNull("confidence_value_flag", association.confidenceValueFlag);
-        builder.withPropertyIfNotNull("comments", association.comments);
-        builder.withPropertyIfNotNull("disease_ontology", association.diseaseOntology);
-        builder.withPropertyIfNotNull("panel", association.panel);
-        builder.withPropertyIfNotNull("entry_date", association.entryDate);
-        builder.withPropertyIfNotNull("organ_specificity", StringUtils.split(association.organSpecificityList, ';'));
-        final Node associationNode = builder.build();
+        final Node associationNode = graph.addNodeFromModel(association);
         final Node geneNode = getOrCreateGeneNode(graph, association.geneSymbol, association.hgncId,
-                                                  association.geneMim, association.prevSymbols);
+                                                  association.geneMim, association.previousGeneSymbols);
         graph.addEdge(geneNode, associationNode, "ASSOCIATED_WITH");
-        final Node diseaseNode = getOrCreateDiseaseNode(graph, association.diseaseName, association.diseaseMim);
+        final Node diseaseNode = getOrCreateDiseaseNode(graph, association.diseaseName, association.diseaseMim,
+                                                        association.diseaseMondo);
         graph.addEdge(associationNode, diseaseNode, "ASSOCIATED_WITH");
         if (association.phenotypes != null)
-            for (final String hpoId : StringUtils.split(association.phenotypes, ';'))
+            for (final String hpoId : StringUtils.splitByWholeSeparator(association.phenotypes, "; "))
                 graph.addEdge(associationNode, getOrCreatePhenotypeNode(graph, hpoId), "SHOWS");
-        if (association.pmids != null) {
-            for (final String pmid : StringUtils.split(association.pmids, ';')) {
-                graph.addEdge(associationNode, getOrCreatePublicationNode(graph, Integer.parseInt(pmid)),
-                              "HAS_REFERENCE");
+        if (association.publications != null) {
+            for (final String pmid : StringUtils.splitByWholeSeparator(association.publications, "; ")) {
+                graph.addEdge(associationNode, getOrCreatePublicationNode(graph, Integer.parseInt(pmid)), "REFERENCES");
             }
         }
     }
 
-    private Node getOrCreateGeneNode(final Graph graph, final String symbol, final Integer hgncId, final String mim,
+    private Node getOrCreateGeneNode(final Graph graph, final String symbol, final Integer hgncId, final Integer mim,
                                      final String prevSymbols) {
-        final Integer mimNumber = tryParseMim(mim);
-        Node node = graph.findNode(GENE_LABEL, "hgnc_symbol", symbol);
+        Node node = graph.findNode(GENE_LABEL, "hgnc_id", hgncId);
         if (node == null) {
-            final String[] prevSymbolsArray = StringUtils.split(prevSymbols, ';');
-            if (mimNumber != null)
-                node = graph.addNode(GENE_LABEL, "hgnc_symbol", symbol, "hgnc_id", hgncId, "mim", mimNumber,
-                                     "previous_symbols", prevSymbolsArray);
-            else
-                node = graph.addNode(GENE_LABEL, "hgnc_symbol", symbol, "hgnc_id", hgncId, "previous_symbols",
-                                     prevSymbolsArray);
+            final var builder = graph.buildNode(GENE_LABEL);
+            builder.withProperty("hgnc_id", hgncId);
+            builder.withProperty("hgnc_symbol", symbol);
+            builder.withPropertyIfNotNull("mim", mim);
+            if (StringUtils.isNotEmpty(prevSymbols)) {
+                final String[] prevSymbolsArray = StringUtils.splitByWholeSeparator(prevSymbols, "; ");
+                if (prevSymbolsArray.length > 0)
+                    builder.withProperty("previous_symbols", prevSymbolsArray);
+            }
+            node = builder.build();
+        }
+        return node;
+    }
+
+    private Node getOrCreateDiseaseNode(final Graph graph, final String name, final String mim, String mondo) {
+        final Integer mimNumber = tryParseMim(mim);
+        Node node = null;
+        if (mimNumber != null)
+            node = graph.findNode(DISEASE_LABEL, "mim", mimNumber);
+        if (node == null)
+            node = graph.findNode(DISEASE_LABEL, "name", name);
+        if (node == null) {
+            final var builder = graph.buildNode(DISEASE_LABEL);
+            builder.withPropertyIfNotNull("name", name);
+            builder.withPropertyIfNotNull("mim", mimNumber);
+            if (StringUtils.isNotEmpty(mondo))
+                builder.withProperty("mondo_id", mondo);
+            node = builder.build();
         }
         return node;
     }
@@ -112,21 +115,6 @@ public class Gene2PhenotypeGraphExporter extends GraphExporter<Gene2PhenotypeDat
         } catch (NumberFormatException ignored) {
         }
         return null;
-    }
-
-    private Node getOrCreateDiseaseNode(final Graph graph, final String name, final String mim) {
-        final Integer mimNumber = tryParseMim(mim);
-        Node node;
-        if (mimNumber == null) {
-            node = graph.findNode(DISEASE_LABEL, "name", name);
-            if (node == null)
-                node = graph.addNode(DISEASE_LABEL, "name", name);
-        } else {
-            node = graph.findNode(DISEASE_LABEL, "mim", mimNumber);
-            if (node == null)
-                node = graph.addNode(DISEASE_LABEL, "name", name, "mim", mimNumber);
-        }
-        return node;
     }
 
     private Node getOrCreatePhenotypeNode(final Graph graph, final String hpoId) {

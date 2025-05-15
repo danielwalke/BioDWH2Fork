@@ -2,23 +2,23 @@ package de.unibi.agbi.biodwh2.gene2phenotype.etl;
 
 import de.unibi.agbi.biodwh2.core.Workspace;
 import de.unibi.agbi.biodwh2.core.etl.Updater;
-import de.unibi.agbi.biodwh2.core.exceptions.UpdaterConnectionException;
 import de.unibi.agbi.biodwh2.core.exceptions.UpdaterException;
 import de.unibi.agbi.biodwh2.core.model.Version;
-import de.unibi.agbi.biodwh2.core.net.HTTPClient;
+import de.unibi.agbi.biodwh2.core.net.HTTPFTPClient;
 import de.unibi.agbi.biodwh2.gene2phenotype.Gene2PhenotypeDataSource;
-import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Gene2PhenotypeUpdater extends Updater<Gene2PhenotypeDataSource> {
-    private static final String G2P_MAIN_URL = "https://www.ebi.ac.uk/gene2phenotype";
-    private static final String G2P_DOWNLOAD_URL = "https://www.ebi.ac.uk/gene2phenotype/downloads/";
+    private static final String FTP_URL = "https://ftp.ebi.ac.uk/pub/databases/gene2phenotype/G2P_data_downloads/";
+    private static final Pattern DATE_PATTERN = Pattern.compile("([0-9]{4})_([0-9]{2})_([0-9]{2})/");
     static final String[] FILE_NAMES = new String[]{
-            "CancerG2P.csv.gz", "CardiacG2P.csv.gz", "DDG2P.csv.gz", "EyeG2P.csv.gz", "SkinG2P.csv.gz"
+            "CancerG2P.csv.gz", "CardiacG2P.csv.gz", "DDG2P.csv.gz", "EyeG2P.csv.gz", "HearingLossG2P.csv.gz",
+            "SkeletalG2P.csv.gz", "SkinG2P.csv.gz"
     };
+    private String ftpVersionPath;
 
     public Gene2PhenotypeUpdater(final Gene2PhenotypeDataSource dataSource) {
         super(dataSource);
@@ -26,24 +26,40 @@ public class Gene2PhenotypeUpdater extends Updater<Gene2PhenotypeDataSource> {
 
     @Override
     public Version getNewestVersion(final Workspace workspace) throws UpdaterException {
-        final String source = getWebsiteSource(G2P_MAIN_URL);
-        final Pattern versionPattern = Pattern.compile("<strong>([0-9]{4}-[0-9]{2}-[0-9]{2})</strong>");
-        final Matcher matcher = versionPattern.matcher(source);
+        final var client = new HTTPFTPClient(FTP_URL);
         Version newestVersion = null;
-        while (matcher.find()) {
-            final String[] dateParts = StringUtils.split(matcher.group(1), '-');
-            final Version version = new Version(Integer.parseInt(dateParts[0]), Integer.parseInt(dateParts[1]),
-                                                Integer.parseInt(dateParts[2]));
-            if (newestVersion == null || newestVersion.compareTo(version) < 0)
-                newestVersion = version;
+        try {
+            for (final var entry : client.listDirectory()) {
+                final Matcher matcher = DATE_PATTERN.matcher(entry.name);
+                if (matcher.matches()) {
+                    final Version version = new Version(Integer.parseInt(matcher.group(1)),
+                                                        Integer.parseInt(matcher.group(2)),
+                                                        Integer.parseInt(matcher.group(3)));
+                    if (newestVersion == null || newestVersion.compareTo(version) < 0) {
+                        newestVersion = version;
+                        ftpVersionPath = entry.fullUrl;
+                    }
+                }
+            }
+        } catch (final IOException e) {
+            throw new UpdaterException(e);
         }
         return newestVersion;
     }
 
     @Override
     protected boolean tryUpdateFiles(final Workspace workspace) throws UpdaterException {
-        for (final String fileName : FILE_NAMES)
-            downloadFileAsBrowser(workspace, G2P_DOWNLOAD_URL + fileName, fileName);
+        final var client = new HTTPFTPClient(ftpVersionPath);
+        try {
+            for (final var entry : client.listDirectory()) {
+                if (entry.name.endsWith(".csv.gz")) {
+                    downloadFileAsBrowser(workspace, entry.fullUrl,
+                                          entry.name.substring(0, entry.name.lastIndexOf('_')) + ".csv.gz");
+                }
+            }
+        } catch (final IOException e) {
+            throw new UpdaterException(e);
+        }
         return true;
     }
 
