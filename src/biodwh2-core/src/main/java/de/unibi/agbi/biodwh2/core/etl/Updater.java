@@ -115,7 +115,7 @@ public abstract class Updater<D extends DataSource> {
             if (localUpdateDateTime == null)
                 return false;
             // If we have no version but already updated, only update again after 24 hours have passed
-            return Duration.between(LocalDateTime.now(), localUpdateDateTime).toDays() < 1;
+            return Duration.between(localUpdateDateTime, LocalDateTime.now()).toDays() < 1;
         }
         return workspaceVersion != null && (newestVersion == null || newestVersion.compareTo(workspaceVersion) == 0);
     }
