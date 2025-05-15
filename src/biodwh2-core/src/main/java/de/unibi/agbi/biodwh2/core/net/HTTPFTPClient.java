@@ -33,7 +33,7 @@ public final class HTTPFTPClient {
     private final Map<String, Entry[]> entryCache;
 
     public HTTPFTPClient(final String url) {
-        this.url = url;
+        this.url = StringUtils.stripEnd(url, "/") + "/";
         entryCache = new HashMap<>();
     }
 
@@ -42,7 +42,7 @@ public final class HTTPFTPClient {
     }
 
     public Entry[] listDirectory(final String path) throws IOException {
-        final String fullDirectoryUrl = path == null ? url : (url + "/" + path);
+        final String fullDirectoryUrl = path == null ? url : (url + path);
         if (entryCache.containsKey(fullDirectoryUrl))
             return entryCache.get(fullDirectoryUrl);
         final String source = HTTPClient.getWebsiteSource(fullDirectoryUrl);
@@ -51,7 +51,8 @@ public final class HTTPFTPClient {
         return entries;
     }
 
-    Entry[] parseWebSource(final String path, final String source) {
+    Entry[] parseWebSource(String path, final String source) {
+        path = path != null ? StringUtils.stripEnd(path, "/") + "/" : "";
         final Document document = Jsoup.parse(source);
         final Element table = document.select("table").first();
         if (table != null)
@@ -71,7 +72,7 @@ public final class HTTPFTPClient {
                 entry.name = columns.get(1).text().trim();
                 entry.modificationDate = columns.get(2).text().trim();
                 entry.size = columns.get(3).text().trim();
-                entry.fullUrl = StringUtils.stripEnd(url, "/") + ("/" + path + "/" + entry.name).replace("//", "/");
+                entry.fullUrl = url + (path + entry.name).replace("//", "/");
                 result.add(entry);
             }
         }
@@ -100,8 +101,7 @@ public final class HTTPFTPClient {
             if (filePath.startsWith("http://") || filePath.startsWith("https://"))
                 entry.fullUrl = filePath;
             else
-                entry.fullUrl = StringUtils.stripEnd(url, "/") + "/" + StringUtils.stripEnd(path, "/") + "/" +
-                                entry.name;
+                entry.fullUrl = url + path + entry.name;
             result.add(entry);
         }
         return result.toArray(new Entry[0]);
