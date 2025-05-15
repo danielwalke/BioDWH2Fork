@@ -290,7 +290,6 @@ public final class GraphMerger {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Creating merged graph from previous status");
         try (Graph mergedGraph = new Graph(workspace.getFilePath(WorkspaceFileType.MERGED_PERSISTENT_GRAPH), true)) {
-            final Map<Long, Long> dependencyNodeIdMap = new HashMap<>();
             // TODO: validate with ontology proxy term resolution
             // First, remove all previous states which are not requested anymore
             for (final String id : previousStatus.keySet())

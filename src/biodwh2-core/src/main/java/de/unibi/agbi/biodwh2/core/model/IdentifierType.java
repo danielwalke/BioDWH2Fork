@@ -1,5 +1,7 @@
 package de.unibi.agbi.biodwh2.core.model;
 
+import org.apache.commons.lang3.StringUtils;
+
 @SuppressWarnings("JavadocLinkAsPlainText")
 public enum IdentifierType {
     /**
@@ -166,5 +168,11 @@ public enum IdentifierType {
         this.bioregistryId = bioregistryId;
         this.localPattern = localPattern;
         this.trimmed = trimmed;
+    }
+
+    public String build(final String id) {
+        if (StringUtils.isBlank(id))
+            return null;
+        return prefix + ':' + id;
     }
 }

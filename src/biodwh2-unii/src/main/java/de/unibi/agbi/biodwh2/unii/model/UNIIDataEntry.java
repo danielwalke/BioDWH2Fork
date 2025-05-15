@@ -121,7 +121,7 @@ public class UNIIDataEntry {
     public String mf;
     @JsonProperty("INCHIKEY")
     @GraphProperty("inchi_key")
-    public String inchikey;
+    public String inchiKey;
     @JsonProperty("SMILES")
     @GraphProperty("smiles")
     public String smiles;

@@ -19,7 +19,6 @@ public class UNIIEntry {
     /*
      * Unique Ingredient Identifier - a non-proprietary, free, unique, unambiguous, nonsemantic, alphanumeric
      * identifier based on a substance's molecular structure and/or descriptive information.
-     * http://www.fda.gov/ForIndustry/DataStandards/SubstanceRegistrationSystem-UniqueIngredientIdentifierUNII/default.html
      */
     @JsonProperty("UNII")
     public String unii;

@@ -9,6 +9,7 @@ import de.unibi.agbi.biodwh2.core.mapping.OpenArchivesInitiative;
 import de.unibi.agbi.biodwh2.core.model.DataSourceFileType;
 import de.unibi.agbi.biodwh2.core.model.DataSourceMetadata;
 import de.unibi.agbi.biodwh2.core.model.Version;
+import de.unibi.agbi.biodwh2.core.model.graph.Graph;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -66,6 +67,19 @@ public abstract class DataSource {
     }
 
     protected abstract GraphExporter<? extends DataSource> getGraphExporter();
+
+    public ReconExporter<? extends DataSource> getReconExporter() {
+        return new ReconExporter<>(this) {
+            @Override
+            public long getReconVersion() {
+                return 0;
+            }
+
+            @Override
+            public void recon(final Workspace workspace, final Graph graph) {
+            }
+        };
+    }
 
     public abstract MappingDescriber getMappingDescriber();
 

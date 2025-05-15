@@ -2,14 +2,8 @@ package de.unibi.agbi.biodwh2.unii;
 
 import de.unibi.agbi.biodwh2.core.DataSource;
 import de.unibi.agbi.biodwh2.core.DevelopmentState;
-import de.unibi.agbi.biodwh2.core.etl.GraphExporter;
-import de.unibi.agbi.biodwh2.core.etl.MappingDescriber;
-import de.unibi.agbi.biodwh2.core.etl.Parser;
-import de.unibi.agbi.biodwh2.core.etl.Updater;
-import de.unibi.agbi.biodwh2.unii.etl.UNIIGraphExporter;
-import de.unibi.agbi.biodwh2.unii.etl.UNIIMappingDescriber;
-import de.unibi.agbi.biodwh2.unii.etl.UNIIParser;
-import de.unibi.agbi.biodwh2.unii.etl.UNIIUpdater;
+import de.unibi.agbi.biodwh2.core.etl.*;
+import de.unibi.agbi.biodwh2.unii.etl.*;
 import de.unibi.agbi.biodwh2.unii.model.UNIIDataEntry;
 import de.unibi.agbi.biodwh2.unii.model.UNIIEntry;
 
@@ -53,6 +47,11 @@ public class UNIIDataSource extends DataSource {
     @Override
     public GraphExporter<UNIIDataSource> getGraphExporter() {
         return new UNIIGraphExporter(this);
+    }
+
+    @Override
+    public ReconExporter<? extends DataSource> getReconExporter() {
+        return new UNIIReconExporter(this);
     }
 
     @Override

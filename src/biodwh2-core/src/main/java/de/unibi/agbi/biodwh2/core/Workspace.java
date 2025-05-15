@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import de.unibi.agbi.biodwh2.core.etl.GraphMapper;
 import de.unibi.agbi.biodwh2.core.etl.GraphMerger;
+import de.unibi.agbi.biodwh2.core.etl.GraphRecon;
 import de.unibi.agbi.biodwh2.core.etl.Updater;
 import de.unibi.agbi.biodwh2.core.exceptions.DataSourceException;
 import de.unibi.agbi.biodwh2.core.exceptions.MergerException;
+import de.unibi.agbi.biodwh2.core.exceptions.ReconException;
 import de.unibi.agbi.biodwh2.core.exceptions.WorkspaceException;
 import de.unibi.agbi.biodwh2.core.io.graph.OutputFormatWriter;
 import de.unibi.agbi.biodwh2.core.model.Configuration;
@@ -171,25 +173,7 @@ public final class Workspace extends BaseWorkspace {
         return row;
     }
 
-    public void processDataSources(final boolean skipUpdate) {
-        if (configuration.getDataSourceIds().length == 0)
-            throw new WorkspaceException("No data sources have been selected. Please ensure that data source IDs " +
-                                         "have been added to the workspace config.json either directly or via " +
-                                         "command line.");
-        if (prepareDataSources()) {
-            LOGGER.info("Processing data sources sequentially");
-            final long start = System.currentTimeMillis();
-            for (final DataSource dataSource : dataSources)
-                processDataSource(dataSource, skipUpdate);
-            final long stop = System.currentTimeMillis();
-            LOGGER.info("Finished processing data sources within {}",
-                        DurationFormatUtils.formatDuration(stop - start, "HH:mm:ss.S"));
-            mergeDataSources();
-            mapDataSources(false, 1);
-        }
-    }
-
-    public void processDataSourcesInParallel(final boolean skipUpdate, final int numThreads) {
+    public void processDataSources(final boolean skipUpdate, final Integer numThreads) {
         if (configuration.getDataSourceIds().length == 0)
             throw new WorkspaceException("No data sources have been selected. Please ensure that data source IDs " +
                                          "have been added to the workspace config.json either directly or via " +
@@ -197,14 +181,19 @@ public final class Workspace extends BaseWorkspace {
         if (prepareDataSources()) {
             ForkJoinPool threadPool = null;
             try {
-                // init new thread pool for processing
-                LOGGER.info("Processing data sources in parallel with {} threads", numThreads);
-                threadPool = new ForkJoinPool(numThreads);
                 final long start = System.currentTimeMillis();
-                threadPool.submit(() -> Stream.of(dataSources).parallel().forEach(dataSource -> {
-                    // submit task to pool
-                    processDataSource(dataSource, skipUpdate);
-                })).get();
+                if (numThreads == null) {
+                    LOGGER.info("Processing data sources");
+                    for (final DataSource dataSource : dataSources)
+                        processDataSource(dataSource, skipUpdate);
+                } else {
+                    LOGGER.info("Processing data sources in parallel with {} threads", numThreads);
+                    threadPool = new ForkJoinPool(numThreads);
+                    threadPool.submit(() -> Stream.of(dataSources).parallel().forEach(dataSource -> {
+                        // submit task to pool
+                        processDataSource(dataSource, skipUpdate);
+                    })).get();
+                }
                 final long stop = System.currentTimeMillis();
                 LOGGER.info("Finished processing data sources within {}",
                             DurationFormatUtils.formatDuration(stop - start, "HH:mm:ss.S"));
@@ -215,10 +204,10 @@ public final class Workspace extends BaseWorkspace {
                 if (threadPool != null)
                     threadPool.shutdown();
             }
+            createDataSourcesReconGraph();
             mergeDataSources();
-            mapDataSources(true, numThreads);
+            mapDataSources(numThreads != null, numThreads != null ? numThreads : 1);
         }
-
     }
 
     private void processDataSource(final DataSource dataSource, final boolean skipUpdate) {
@@ -292,6 +281,19 @@ public final class Workspace extends BaseWorkspace {
             return true;
         final Integer exportedVersion = GraphMigrator.peekVersion(filePath);
         return exportedVersion == null || Graph.VERSION > exportedVersion;
+    }
+
+    private void createDataSourcesReconGraph() {
+        if (LOGGER.isInfoEnabled())
+            LOGGER.info("Recon of data sources started");
+        try {
+            new GraphRecon().recon(this, dataSources);
+            if (LOGGER.isInfoEnabled())
+                LOGGER.info("Recon of data sources finished");
+        } catch (ReconException e) {
+            if (LOGGER.isErrorEnabled())
+                LOGGER.error("Recon of data sources failed", e);
+        }
     }
 
     private void mergeDataSources() {

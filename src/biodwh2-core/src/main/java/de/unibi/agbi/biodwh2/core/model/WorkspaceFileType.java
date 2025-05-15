@@ -4,6 +4,7 @@ import de.unibi.agbi.biodwh2.core.model.graph.Graph;
 import de.unibi.agbi.biodwh2.core.model.graph.GraphFileFormat;
 
 public enum WorkspaceFileType {
+    RECON_GRAPH("recon." + Graph.EXTENSION),
     MERGED_PERSISTENT_GRAPH("merged." + Graph.EXTENSION),
     MERGED_GRAPHML_GZ("merged." + GraphFileFormat.GRAPH_ML.extension + ".gz"),
     MERGED_META_GRAPH_IMAGE("merged-meta-graph.png"),
