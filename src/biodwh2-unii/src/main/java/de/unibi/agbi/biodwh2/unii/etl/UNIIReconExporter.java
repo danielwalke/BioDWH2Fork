@@ -3,6 +3,7 @@ package de.unibi.agbi.biodwh2.unii.etl;
 import de.unibi.agbi.biodwh2.core.Workspace;
 import de.unibi.agbi.biodwh2.core.etl.ReconExporter;
 import de.unibi.agbi.biodwh2.core.exceptions.ReconException;
+import de.unibi.agbi.biodwh2.core.io.FileUtils;
 import de.unibi.agbi.biodwh2.core.model.IdentifierType;
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
 import de.unibi.agbi.biodwh2.unii.UNIIDataSource;
@@ -27,31 +28,45 @@ public class UNIIReconExporter extends ReconExporter<UNIIDataSource> {
     @Override
     public void recon(final Workspace workspace, final Graph graph) throws ReconException {
         final Map<String, List<UNIIEntry>> uniiEntriesMap = new HashMap<>();
-        for (final UNIIEntry entry : dataSource.uniiEntries) {
-            if (!uniiEntriesMap.containsKey(entry.unii))
-                uniiEntriesMap.put(entry.unii, new ArrayList<>());
-            uniiEntriesMap.get(entry.unii).add(entry);
+        try {
+            FileUtils.forEachZipEntryWithPrefix(workspace, dataSource, UNIIUpdater.UNIIS_FILE_NAME, "UNII_Names_",
+                                                (stream, e) -> {
+                                                    FileUtils.openTsvWithHeader(stream, UNIIEntry.class, (entry) -> {
+                                                        if (!uniiEntriesMap.containsKey(entry.unii))
+                                                            uniiEntriesMap.put(entry.unii, new ArrayList<>());
+                                                        uniiEntriesMap.get(entry.unii).add(entry);
+                                                    });
+                                                });
+            FileUtils.forEachZipEntryWithPrefix(workspace, dataSource, UNIIUpdater.UNII_DATA_FILE_NAME, "UNII_Records_",
+                                                (stream, e) -> {
+                                                    FileUtils.openTsvWithHeader(stream, UNIIDataEntry.class,
+                                                                                (entry) -> {
+                                                                                    reconEntry(graph,
+                                                                                               uniiEntriesMap.get(
+                                                                                                       entry.unii),
+                                                                                               entry);
+                                                                                });
+                                                });
+        } catch (Exception e) {
+            throw new ReconException("Failed to parse the file '" + UNIIUpdater.UNIIS_FILE_NAME + "'", e);
         }
-        for (final Map.Entry<String, List<UNIIEntry>> entry : uniiEntriesMap.entrySet())
-            reconEntry(graph, entry.getValue(), dataSource.uniiDataEntries.get(entry.getKey()));
     }
 
     private void reconEntry(final Graph graph, final List<UNIIEntry> entries, final UNIIDataEntry dataEntry) {
-        final var uniiNodeId = createIdentifier(graph, IdentifierType.UNII.build(dataEntry.unii));
-        final var casNodeId = createIdentifier(graph, IdentifierType.CAS.build(dataEntry.rn));
-        final var rxCuiNodeId = createIdentifier(graph, IdentifierType.RX_NORM_CUI.build(dataEntry.rxCui));
-        final var pubChemNodeId = createIdentifier(graph, IdentifierType.PUB_CHEM_COMPOUND.build(dataEntry.pubchem));
-        // inchiKey, smiles, ...
-        createXrefOrNameRelation(graph, uniiNodeId, casNodeId);
-        createXrefOrNameRelation(graph, uniiNodeId, rxCuiNodeId);
-        createXrefOrNameRelation(graph, uniiNodeId, pubChemNodeId);
-        for (final var entry : entries) {
-            // Type: "of" -> "official_names", "sys" -> "systematic_names", "cn" -> "common_names", "cd" -> "codes",
-            //       "bn" -> "brand_names"
-            if ("cd".equals(entry.type))
-                continue;
-            final var synonymNodeId = createSynonym(graph, entry.name);
-            createXrefOrNameRelation(graph, uniiNodeId, synonymNodeId);
+        final String id = IdentifierType.UNII.build(dataEntry.unii);
+        createXrefRelation(graph, id, IdentifierType.CAS.build(dataEntry.rn));
+        createXrefRelation(graph, id, IdentifierType.RX_NORM_CUI.build(dataEntry.rxCui));
+        createXrefRelation(graph, id, IdentifierType.PUB_CHEM_COMPOUND.build(dataEntry.pubchem));
+        createXrefRelation(graph, id, prefixIdentifier(INCHIKEY_PREFIX, dataEntry.inchiKey));
+        createXrefRelation(graph, id, prefixIdentifier(SMILES_PREFIX, dataEntry.smiles));
+        if (entries != null) {
+            for (final var entry : entries) {
+                // Type: "of" -> "official_names", "sys" -> "systematic_names", "cn" -> "common_names", "cd" -> "codes",
+                //       "bn" -> "brand_names"
+                if ("cd".equals(entry.type))
+                    continue;
+                createNameRelation(graph, id, entry.name);
+            }
         }
     }
 }

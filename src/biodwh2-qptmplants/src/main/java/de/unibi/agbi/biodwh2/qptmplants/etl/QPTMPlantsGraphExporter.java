@@ -45,8 +45,8 @@ public class QPTMPlantsGraphExporter extends GraphExporter<QPTMPlantsDataSource>
         graph.beginEdgeIndicesDelay("HAS_PTM");
         graph.beginEdgeIndicesDelay("BELONGS_TO");
         try {
-            FileUtils.forEachZipEntry(workspace, dataSource, QPTMPlantsUpdater.FILE_NAME, ".txt",
-                                      (stream, entry) -> exportEntries(stream, graph));
+            FileUtils.forEachZipEntryWithSuffix(workspace, dataSource, QPTMPlantsUpdater.FILE_NAME, ".txt",
+                                                (stream, entry) -> exportEntries(stream, graph));
         } catch (Exception e) {
             throw new ExporterFormatException("Failed to export '" + QPTMPlantsUpdater.FILE_NAME + "'", e);
         }

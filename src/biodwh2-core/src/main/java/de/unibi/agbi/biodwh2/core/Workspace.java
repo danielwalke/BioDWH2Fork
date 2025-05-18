@@ -173,7 +173,7 @@ public final class Workspace extends BaseWorkspace {
         return row;
     }
 
-    public void processDataSources(final boolean skipUpdate, final Integer numThreads) {
+    public void processDataSources(final boolean skipUpdate, final boolean reconOnly, final Integer numThreads) {
         if (configuration.getDataSourceIds().length == 0)
             throw new WorkspaceException("No data sources have been selected. Please ensure that data source IDs " +
                                          "have been added to the workspace config.json either directly or via " +
@@ -185,13 +185,13 @@ public final class Workspace extends BaseWorkspace {
                 if (numThreads == null) {
                     LOGGER.info("Processing data sources");
                     for (final DataSource dataSource : dataSources)
-                        processDataSource(dataSource, skipUpdate);
+                        processDataSource(dataSource, skipUpdate, reconOnly);
                 } else {
                     LOGGER.info("Processing data sources in parallel with {} threads", numThreads);
                     threadPool = new ForkJoinPool(numThreads);
                     threadPool.submit(() -> Stream.of(dataSources).parallel().forEach(dataSource -> {
                         // submit task to pool
-                        processDataSource(dataSource, skipUpdate);
+                        processDataSource(dataSource, skipUpdate, reconOnly);
                     })).get();
                 }
                 final long stop = System.currentTimeMillis();
@@ -205,12 +205,14 @@ public final class Workspace extends BaseWorkspace {
                     threadPool.shutdown();
             }
             createDataSourcesReconGraph();
-            mergeDataSources();
-            mapDataSources(numThreads != null, numThreads != null ? numThreads : 1);
+            if (!reconOnly) {
+                mergeDataSources();
+                mapDataSources(numThreads != null, numThreads != null ? numThreads : 1);
+            }
         }
     }
 
-    private void processDataSource(final DataSource dataSource, final boolean skipUpdate) {
+    private void processDataSource(final DataSource dataSource, final boolean skipUpdate, final boolean reconOnly) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Processing of data source '{}' started", dataSource.getId());
         Updater.UpdateState updateState;
@@ -227,16 +229,18 @@ public final class Workspace extends BaseWorkspace {
                 LOGGER.info("Running updater");
             updateState = dataSource.updateAutomatic(this);
         }
-        if (isDataSourceExportNeeded(updateState, dataSource)) {
-            if (LOGGER.isInfoEnabled())
-                LOGGER.info("Running parser");
-            if (dataSource.parse(this)) {
+        if (!reconOnly) {
+            if (isDataSourceExportNeeded(updateState, dataSource)) {
                 if (LOGGER.isInfoEnabled())
-                    LOGGER.info("Running exporter");
-                dataSource.export(this);
-            }
-        } else if (LOGGER.isInfoEnabled())
-            LOGGER.info("Skipping export of data source '{}' because nothing changed", dataSource.getId());
+                    LOGGER.info("Running parser");
+                if (dataSource.parse(this)) {
+                    if (LOGGER.isInfoEnabled())
+                        LOGGER.info("Running exporter");
+                    dataSource.export(this);
+                }
+            } else if (LOGGER.isInfoEnabled())
+                LOGGER.info("Skipping export of data source '{}' because nothing changed", dataSource.getId());
+        }
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Processing of data source '{}' finished", dataSource.getId());
     }

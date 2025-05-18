@@ -300,7 +300,7 @@ public class DrugBankGraphExporter extends GraphExporter<DrugBankDataSource> {
             throw new ExporterException("Failed to find file '" + DrugBankUpdater.FULL_DATABASE_FILE_NAME + "'");
         try {
             final int[] counter = new int[]{1};
-            FileUtils.forEachZipEntry(filePath, ".xml", (stream, entry) -> {
+            FileUtils.forEachZipEntryWithSuffix(filePath, ".xml", (stream, entry) -> {
                 FileUtils.streamXmlList(stream, Drug.class, (protein -> {
                     if (counter[0] % 250 == 0 && LOGGER.isInfoEnabled())
                         LOGGER.info("Exporting drug progress {}", counter[0]);

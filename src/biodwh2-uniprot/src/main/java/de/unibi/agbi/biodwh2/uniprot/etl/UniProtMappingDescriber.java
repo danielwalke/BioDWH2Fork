@@ -77,6 +77,9 @@ public class UniProtMappingDescriber extends MappingDescriber {
 
     @Override
     public PathMappingDescription describe(final Graph graph, final Node[] nodes, final Edge[] edges) {
+        if (edges.length == 1 && edges[0].getLabel().endsWith("BELONGS_TO")) {
+            return new PathMappingDescription(PathMappingDescription.EdgeType.BELONGS_TO);
+        }
         return null;
     }
 
@@ -90,6 +93,10 @@ public class UniProtMappingDescriber extends MappingDescriber {
 
     @Override
     protected PathMapping[] getEdgePathMappings() {
-        return new PathMapping[0];
+        final var belongsToMapping = new PathMapping().add(UniProtGraphExporter.PROTEIN_LABEL, "BELONGS_TO",
+                                                           UniProtGraphExporter.ORGANISM_LABEL, EdgeDirection.FORWARD);
+        return new PathMapping[]{
+                belongsToMapping
+        };
     }
 }

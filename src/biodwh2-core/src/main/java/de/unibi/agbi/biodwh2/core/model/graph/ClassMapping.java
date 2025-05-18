@@ -8,7 +8,7 @@ import java.lang.reflect.Field;
 import java.util.*;
 import java.util.regex.Pattern;
 
-final class ClassMapping {
+public final class ClassMapping {
     static class ClassMappingField {
         final Field field;
         final String propertyName;
@@ -81,6 +81,7 @@ final class ClassMapping {
     final ClassMappingArrayField[] arrayFields;
     final ClassMappingBooleanField[] booleanFields;
     final ClassMappingNumberField[] numberFields;
+    private final Map<String, ClassMappingField> propertyNameFieldMap = new HashMap<>();
 
     ClassMapping(final Class<?> type) {
         label = loadLabel(type);
@@ -114,8 +115,10 @@ final class ClassMapping {
     private ClassMappingField loadClassMappingField(final Field field) {
         field.setAccessible(true);
         final GraphProperty annotation = field.getAnnotation(GraphProperty.class);
-        return new ClassMappingField(field, annotation.value(), annotation.ignoreEmpty(), annotation.emptyPlaceholder(),
-                                     annotation.transformation());
+        final var result = new ClassMappingField(field, annotation.value(), annotation.ignoreEmpty(),
+                                                 annotation.emptyPlaceholder(), annotation.transformation());
+        propertyNameFieldMap.put(field.getName(), result);
+        return result;
     }
 
     private ClassMappingArrayField[] loadClassMappingArrayFields(final Class<?> type) {
@@ -129,9 +132,11 @@ final class ClassMapping {
     private ClassMappingArrayField loadClassMappingArrayField(final Field field) {
         field.setAccessible(true);
         final GraphArrayProperty annotation = field.getAnnotation(GraphArrayProperty.class);
-        return new ClassMappingArrayField(field, annotation.value(), annotation.arrayDelimiter(),
-                                          annotation.quotedArrayElements(), annotation.emptyPlaceholder(),
-                                          annotation.type());
+        final var result = new ClassMappingArrayField(field, annotation.value(), annotation.arrayDelimiter(),
+                                                      annotation.quotedArrayElements(), annotation.emptyPlaceholder(),
+                                                      annotation.type());
+        propertyNameFieldMap.put(field.getName(), result);
+        return result;
     }
 
     private ClassMappingBooleanField[] loadClassMappingBooleanFields(final Class<?> type) {
@@ -145,7 +150,9 @@ final class ClassMapping {
     private ClassMappingBooleanField loadClassMappingBooleanField(final Field field) {
         field.setAccessible(true);
         final GraphBooleanProperty annotation = field.getAnnotation(GraphBooleanProperty.class);
-        return new ClassMappingBooleanField(field, annotation.value(), annotation.truthValue());
+        final var result = new ClassMappingBooleanField(field, annotation.value(), annotation.truthValue());
+        propertyNameFieldMap.put(field.getName(), result);
+        return result;
     }
 
     private ClassMappingNumberField[] loadClassMappingNumberFields(final Class<?> type) {
@@ -159,8 +166,10 @@ final class ClassMapping {
     private ClassMappingNumberField loadClassMappingNumberField(final Field field) {
         field.setAccessible(true);
         final GraphNumberProperty annotation = field.getAnnotation(GraphNumberProperty.class);
-        return new ClassMappingNumberField(field, annotation.value(), annotation.ignoreEmpty(),
-                                           annotation.emptyPlaceholder(), annotation.type());
+        final var result = new ClassMappingNumberField(field, annotation.value(), annotation.ignoreEmpty(),
+                                                       annotation.emptyPlaceholder(), annotation.type());
+        propertyNameFieldMap.put(field.getName(), result);
+        return result;
     }
 
     void setModelProperties(final MVStoreModel model, final Object obj) {
@@ -343,52 +352,69 @@ final class ClassMapping {
     private void setModelBuilderPropertiesFromArrayFields(final ModelBuilder<?> builder,
                                                           final Object obj) throws IllegalAccessException {
         for (final ClassMappingArrayField field : arrayFields)
-            setModelBuilderPropertyFromArrayField(builder, obj, field);
+            builder.withPropertyIfNotNull(field.propertyName, getFieldArrayValue(obj, field));
     }
 
-    private void setModelBuilderPropertyFromArrayField(final ModelBuilder<?> builder, final Object obj,
-                                                       final ClassMappingArrayField field) throws IllegalAccessException {
+    private Object getFieldArrayValue(final Object obj,
+                                      final ClassMappingArrayField field) throws IllegalAccessException {
         final String[] elements = getArrayFieldValue(obj, field);
         if (elements != null) {
             if (field.type == GraphArrayProperty.Type.Int) {
                 final Integer[] intElements = new Integer[elements.length];
                 for (int i = 0; i < intElements.length; i++)
                     intElements[i] = Integer.parseInt(elements[i]);
-                builder.withProperty(field.propertyName, intElements);
-            } else {
-                builder.withProperty(field.propertyName, elements);
+                return intElements;
             }
+            return elements;
         }
+        return null;
     }
 
     private void setModelBuilderPropertiesFromBooleanFields(final ModelBuilder<?> builder,
                                                             final Object obj) throws IllegalAccessException {
         for (final ClassMappingBooleanField field : booleanFields)
-            setModelBuilderPropertyFromBooleanField(builder, obj, field);
+            builder.withPropertyIfNotNull(field.propertyName, getFieldBooleanValue(obj, field));
     }
 
-    private void setModelBuilderPropertyFromBooleanField(final ModelBuilder<?> builder, final Object obj,
-                                                         final ClassMappingBooleanField field) throws IllegalAccessException {
+    private Boolean getFieldBooleanValue(final Object obj,
+                                         final ClassMappingBooleanField field) throws IllegalAccessException {
         final Object value = field.field.get(obj);
         if (value != null)
-            builder.withProperty(field.propertyName, field.truthValue.equalsIgnoreCase(value.toString()));
+            return field.truthValue.equalsIgnoreCase(value.toString());
+        return null;
     }
 
     private void setModelBuilderPropertiesFromNumberFields(final ModelBuilder<?> builder,
                                                            final Object obj) throws IllegalAccessException {
         for (final ClassMappingNumberField field : numberFields)
-            setModelBuilderPropertiesFromNumberField(builder, obj, field);
+            builder.withPropertyIfNotNull(field.propertyName, getFieldNumberValue(obj, field));
     }
 
-    private void setModelBuilderPropertiesFromNumberField(final ModelBuilder<?> builder, final Object obj,
-                                                          final ClassMappingNumberField field) throws IllegalAccessException {
+    private Object getFieldNumberValue(final Object obj,
+                                       final ClassMappingNumberField field) throws IllegalAccessException {
         final Object value = getFieldValue(obj, field);
         if (value != null) {
             if (field.type == GraphNumberProperty.Type.Int)
-                builder.withProperty(field.propertyName, Integer.parseInt(value.toString()));
+                return Integer.parseInt(value.toString());
             else if (field.type == GraphNumberProperty.Type.Long)
-                builder.withProperty(field.propertyName, Long.parseLong(value.toString()));
+                return Long.parseLong(value.toString());
         }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T getValue(final Object obj, final String propertyName) throws IllegalAccessException {
+        final var field = propertyNameFieldMap.get(propertyName);
+        if (field == null)
+            return null;
+        if (field instanceof ClassMappingArrayField) {
+            return (T) getFieldArrayValue(obj, (ClassMappingArrayField) field);
+        } else if (field instanceof ClassMappingBooleanField) {
+            return (T) getFieldBooleanValue(obj, (ClassMappingBooleanField) field);
+        } else if (field instanceof ClassMappingNumberField) {
+            return (T) getFieldNumberValue(obj, (ClassMappingNumberField) field);
+        }
+        return (T) getFieldValue(obj, field);
     }
 
     public static ClassMapping get(final Object obj) {

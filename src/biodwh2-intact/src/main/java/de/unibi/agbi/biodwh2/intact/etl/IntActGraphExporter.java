@@ -27,12 +27,13 @@ public class IntActGraphExporter extends MIGraphExporter<IntActDataSource> {
                 if (!filePath.exists())
                     throw new ExporterException("Failed to find file '" + entry.getValue() + "'");
                 try {
-                    FileUtils.forEachZipEntry(workspace, dataSource, entry.getValue(), ".xml", (stream, zipEntry) -> {
-                        if (LOGGER.isInfoEnabled())
-                            LOGGER.info("Exporting '{}'...", zipEntry.getName());
-                        callback.accept(stream);
+                    FileUtils.forEachZipEntryWithSuffix(workspace, dataSource, entry.getValue(), ".xml",
+                                                        (stream, zipEntry) -> {
+                                                            if (LOGGER.isInfoEnabled())
+                                                                LOGGER.info("Exporting '{}'...", zipEntry.getName());
+                                                            callback.accept(stream);
 
-                    });
+                                                        });
                 } catch (Exception e) {
                     throw new ExporterException("Failed to export file '" + entry.getValue() + "'", e);
                 }

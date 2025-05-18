@@ -17,7 +17,8 @@ public final class PathMappingDescription {
         TRANSCRIBES_TO,
         TRANSLATES_TO,
         INVESTIGATES,
-        ASSOCIATED_WITH
+        ASSOCIATED_WITH,
+        BELONGS_TO
     }
 
     private final String type;

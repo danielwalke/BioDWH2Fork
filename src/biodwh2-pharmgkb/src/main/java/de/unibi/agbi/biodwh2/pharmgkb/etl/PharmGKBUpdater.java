@@ -17,8 +17,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public class PharmGKBUpdater extends Updater<PharmGKBDataSource> {
+    static final String CHEMICALS_FILE_NAME = "chemicals.zip";
     static final String[] FILE_NAMES = {
-            "genes.zip", "chemicals.zip", "variants.zip", "phenotypes.zip", "clinicalAnnotations.zip",
+            "genes.zip", CHEMICALS_FILE_NAME, "variants.zip", "phenotypes.zip", "clinicalAnnotations.zip",
             "variantAnnotations.zip", "dosingGuidelines.json.zip", "drugLabels.zip", "pathways-tsv.zip",
             "clinicalVariants.zip", "occurrences.zip", "automated_annotations.zip"
     };

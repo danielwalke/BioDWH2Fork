@@ -47,8 +47,8 @@ public class Drug {
     @GraphProperty(value = "molecular_weight", emptyPlaceholder = ".")
     public String molecularWeight;
     @JsonProperty("Polararea")
-    @GraphProperty(value = "polarea", emptyPlaceholder = ".")
-    public String polarea;
+    @GraphProperty(value = "polar_area", emptyPlaceholder = ".")
+    public String polarArea;
     @JsonProperty("Complexity")
     @GraphProperty(value = "complexity", emptyPlaceholder = ".")
     public String complexity;
@@ -56,16 +56,16 @@ public class Drug {
     @GraphProperty(value = "xlogp", emptyPlaceholder = ".")
     public String xlogp;
     @JsonProperty("Heavycnt")
-    @GraphNumberProperty(value = "heavycnt", emptyPlaceholder = ".")
+    @GraphNumberProperty(value = "heavy_count", emptyPlaceholder = ".")
     public String heavyCount;
     @JsonProperty("Hbonddonor")
-    @GraphNumberProperty(value = "hbonddonor", emptyPlaceholder = ".")
+    @GraphNumberProperty(value = "hydrogen_bond_donors", emptyPlaceholder = ".")
     public String hBondDonor;
     @JsonProperty("Hbondacc")
-    @GraphNumberProperty(value = "hbondacc", emptyPlaceholder = ".")
+    @GraphNumberProperty(value = "hydrogen_bond_acceptors", emptyPlaceholder = ".")
     public String hBondAcceptor;
     @JsonProperty("Rotbonds")
-    @GraphNumberProperty(value = "rotbonds", emptyPlaceholder = ".")
+    @GraphNumberProperty(value = "rotatable_bonds_count", emptyPlaceholder = ".")
     public String rotBonds;
     @JsonProperty("Formula")
     @GraphProperty(value = "formula", emptyPlaceholder = ".")

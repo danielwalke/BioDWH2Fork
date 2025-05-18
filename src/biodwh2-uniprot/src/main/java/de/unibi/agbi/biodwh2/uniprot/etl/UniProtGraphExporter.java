@@ -184,7 +184,7 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
                 }
             }
         }
-        graph.addEdge(node, getOrCreateOrganism(graph, entry.organism), "HAS_SOURCE");
+        graph.addEdge(node, getOrCreateOrganism(graph, entry.organism), "BELONGS_TO");
     }
 
     private long getOrCreateOrganism(final Graph graph, final Organism organism) {

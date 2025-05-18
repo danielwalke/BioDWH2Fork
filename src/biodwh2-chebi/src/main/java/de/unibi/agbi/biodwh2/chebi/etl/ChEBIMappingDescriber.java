@@ -5,6 +5,7 @@ import de.unibi.agbi.biodwh2.core.etl.GraphExporter;
 import de.unibi.agbi.biodwh2.core.etl.MappingDescriber;
 import de.unibi.agbi.biodwh2.core.model.IdentifierType;
 import de.unibi.agbi.biodwh2.core.model.graph.*;
+import de.unibi.agbi.biodwh2.core.model.graph.mapping.CompoundNodeMappingDescription;
 import org.apache.commons.lang3.StringUtils;
 
 public class ChEBIMappingDescriber extends MappingDescriber {
@@ -20,7 +21,7 @@ public class ChEBIMappingDescriber extends MappingDescriber {
     }
 
     private NodeMappingDescription[] describeCompound(final Node node) {
-        final var description = new NodeMappingDescription(NodeMappingDescription.NodeType.COMPOUND);
+        final var description = new CompoundNodeMappingDescription();
         description.addIdentifier(IdentifierType.CHEBI, node.<Integer>getProperty(GraphExporter.ID_KEY));
         final String[] xrefs = node.getProperty("xrefs");
         if (xrefs != null) {
@@ -52,6 +53,7 @@ public class ChEBIMappingDescriber extends MappingDescriber {
             }
         }
         description.addName(node.getProperty("name"));
+        description.setInchi(node.getProperty("inchi"));
         return new NodeMappingDescription[]{description};
     }
 

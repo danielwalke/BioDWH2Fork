@@ -1,6 +1,7 @@
 package de.unibi.agbi.biodwh2.redodb.etl;
 
 import de.unibi.agbi.biodwh2.core.Workspace;
+import de.unibi.agbi.biodwh2.core.chem.CAS;
 import de.unibi.agbi.biodwh2.core.etl.GraphExporter;
 import de.unibi.agbi.biodwh2.core.exceptions.ExporterException;
 import de.unibi.agbi.biodwh2.core.mapping.IdentifierUtils;
@@ -68,7 +69,8 @@ public final class ReDODBGraphExporter extends GraphExporter<ReDODBDataSource> {
     private String getPubChemId(final String link) {
         if (StringUtils.isEmpty(link))
             return null;
-        final Matcher matcher = IdentifierUtils.CAS_NUMBER_PATTERN.matcher(link);
+        // TODO: re-validate
+        final Matcher matcher = CAS.CAS_NUMBER_PATTERN.matcher(link);
         return matcher.find() ? matcher.group() : null;
     }
 

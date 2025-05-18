@@ -236,9 +236,9 @@ public final class BioDWH2 {
     private void updateWorkspace(final CmdArgs commandLine) {
         final var workspace = new Workspace(commandLine.update);
         if (commandLine.runsInParallel)
-            workspace.processDataSources(commandLine.skipUpdate, commandLine.numThreads);
+            workspace.processDataSources(commandLine.skipUpdate, commandLine.reconOnly, commandLine.numThreads);
         else
-            workspace.processDataSources(commandLine.skipUpdate, null);
+            workspace.processDataSources(commandLine.skipUpdate, commandLine.reconOnly, null);
     }
 
     private void setDataSourceVersion(final CmdArgs commandLine) {

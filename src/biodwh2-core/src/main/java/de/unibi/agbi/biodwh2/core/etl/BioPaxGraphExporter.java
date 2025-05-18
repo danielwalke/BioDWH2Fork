@@ -218,7 +218,8 @@ public abstract class BioPaxGraphExporter<D extends DataSource> extends GraphExp
                 break;
             case "zip":
                 try {
-                    FileUtils.forEachZipEntry(filePath, ".owl", (stream, entry) -> exportBioPaxStream(graph, stream));
+                    FileUtils.forEachZipEntryWithSuffix(filePath, ".owl",
+                                                        (stream, entry) -> exportBioPaxStream(graph, stream));
                 } catch (Exception e) {
                     throw new ExporterFormatException("Failed to export '" + getFileName() + "'", e);
                 }
@@ -631,7 +632,8 @@ public abstract class BioPaxGraphExporter<D extends DataSource> extends GraphExp
 
     private void exportStoichiometry(final Graph graph, final Stoichiometry entry) {
         final Node node = graph.buildNode().withLabel("Stoichiometry").withModel(entry).build();
-        // TODO: physicalEntity
+        if (entry.physicalEntity != null)
+            addEdge(graph, "HAS_ENTITY", node.getId(), entry.physicalEntity.resource);
     }
 
     private void exportTemplateReaction(final Graph graph, final TemplateReaction entry) {

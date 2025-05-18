@@ -30,8 +30,8 @@ public class Ingredient {
     @GraphArrayProperty(value = "pubchem_cid", emptyPlaceholder = {"NA", "n.a."}, type = GraphArrayProperty.Type.Int)
     public String pubchemCid;
     @JsonProperty("MW")
-    @GraphProperty(value = "mw", emptyPlaceholder = {"NA", "n.a."})
-    public String mw;
+    @GraphProperty(value = "molecular_weight", emptyPlaceholder = {"NA", "n.a."})
+    public String molecularWeight;
     @JsonProperty("LogS")
     @GraphProperty(value = "logs", emptyPlaceholder = {"NA", "n.a."})
     public String logS;

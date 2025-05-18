@@ -463,13 +463,38 @@ public final class FileUtils {
         return result.toArray(new String[0]);
     }
 
-    public static void forEachZipEntry(final Path file, final String suffix,
-                                       final ZipEntryConsumer<ZipInputStream, ZipEntry> consumer) throws Exception {
-        forEachZipEntry(file.toFile(), suffix, consumer);
+    public static void forEachZipEntryWithPrefix(final Path file, final String prefix,
+                                                 final ZipEntryConsumer<ZipInputStream, ZipEntry> consumer) throws Exception {
+        forEachZipEntryWithPrefix(file.toFile(), prefix, consumer);
     }
 
-    public static void forEachZipEntry(final File file, final String suffix,
-                                       final ZipEntryConsumer<ZipInputStream, ZipEntry> consumer) throws Exception {
+    public static void forEachZipEntryWithPrefix(final File file, final String prefix,
+                                                 final ZipEntryConsumer<ZipInputStream, ZipEntry> consumer) throws Exception {
+        try (final FileInputStream inputStream = new FileInputStream(file);
+             final BufferedInputStream bufferedInputStream = new BufferedInputStream(inputStream);
+             final ZipInputStream zipInputStream = new ZipInputStream(bufferedInputStream)) {
+            ZipEntry zipEntry;
+            while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                if (prefix == null || zipEntry.getName().startsWith(prefix)) {
+                    consumer.accept(zipInputStream, zipEntry);
+                }
+            }
+        }
+    }
+
+    public static void forEachZipEntryWithPrefix(final Workspace workspace, final DataSource dataSource,
+                                                 final String fileName, final String prefix,
+                                                 final ZipEntryConsumer<ZipInputStream, ZipEntry> consumer) throws Exception {
+        forEachZipEntryWithPrefix(dataSource.resolveSourceFilePath(workspace, fileName).toFile(), prefix, consumer);
+    }
+
+    public static void forEachZipEntryWithSuffix(final Path file, final String suffix,
+                                                 final ZipEntryConsumer<ZipInputStream, ZipEntry> consumer) throws Exception {
+        forEachZipEntryWithSuffix(file.toFile(), suffix, consumer);
+    }
+
+    public static void forEachZipEntryWithSuffix(final File file, final String suffix,
+                                                 final ZipEntryConsumer<ZipInputStream, ZipEntry> consumer) throws Exception {
         try (final FileInputStream inputStream = new FileInputStream(file);
              final BufferedInputStream bufferedInputStream = new BufferedInputStream(inputStream);
              final ZipInputStream zipInputStream = new ZipInputStream(bufferedInputStream)) {
@@ -482,10 +507,10 @@ public final class FileUtils {
         }
     }
 
-    public static void forEachZipEntry(final Workspace workspace, final DataSource dataSource, final String fileName,
-                                       final String suffix,
-                                       final ZipEntryConsumer<ZipInputStream, ZipEntry> consumer) throws Exception {
-        forEachZipEntry(dataSource.resolveSourceFilePath(workspace, fileName).toFile(), suffix, consumer);
+    public static void forEachZipEntryWithSuffix(final Workspace workspace, final DataSource dataSource,
+                                                 final String fileName, final String suffix,
+                                                 final ZipEntryConsumer<ZipInputStream, ZipEntry> consumer) throws Exception {
+        forEachZipEntryWithSuffix(dataSource.resolveSourceFilePath(workspace, fileName).toFile(), suffix, consumer);
     }
 
     @FunctionalInterface

@@ -2,11 +2,13 @@ package de.unibi.agbi.biodwh2.cmaup;
 
 import de.unibi.agbi.biodwh2.cmaup.etl.CMAUPGraphExporter;
 import de.unibi.agbi.biodwh2.cmaup.etl.CMAUPMappingDescriber;
+import de.unibi.agbi.biodwh2.cmaup.etl.CMAUPReconExporter;
 import de.unibi.agbi.biodwh2.cmaup.etl.CMAUPUpdater;
 import de.unibi.agbi.biodwh2.core.DataSource;
 import de.unibi.agbi.biodwh2.core.DevelopmentState;
 import de.unibi.agbi.biodwh2.core.etl.GraphExporter;
 import de.unibi.agbi.biodwh2.core.etl.MappingDescriber;
+import de.unibi.agbi.biodwh2.core.etl.ReconExporter;
 import de.unibi.agbi.biodwh2.core.etl.Updater;
 
 public class CMAUPDataSource extends DataSource {
@@ -28,6 +30,11 @@ public class CMAUPDataSource extends DataSource {
     @Override
     protected GraphExporter<? extends DataSource> getGraphExporter() {
         return new CMAUPGraphExporter(this);
+    }
+
+    @Override
+    public ReconExporter<? extends DataSource> getReconExporter() {
+        return new CMAUPReconExporter(this);
     }
 
     @Override

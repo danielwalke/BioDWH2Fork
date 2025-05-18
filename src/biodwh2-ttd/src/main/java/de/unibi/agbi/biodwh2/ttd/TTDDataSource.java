@@ -2,9 +2,13 @@ package de.unibi.agbi.biodwh2.ttd;
 
 import de.unibi.agbi.biodwh2.core.DataSource;
 import de.unibi.agbi.biodwh2.core.DevelopmentState;
-import de.unibi.agbi.biodwh2.core.etl.*;
+import de.unibi.agbi.biodwh2.core.etl.GraphExporter;
+import de.unibi.agbi.biodwh2.core.etl.MappingDescriber;
+import de.unibi.agbi.biodwh2.core.etl.ReconExporter;
+import de.unibi.agbi.biodwh2.core.etl.Updater;
 import de.unibi.agbi.biodwh2.ttd.etl.TTDGraphExporter;
 import de.unibi.agbi.biodwh2.ttd.etl.TTDMappingDescriber;
+import de.unibi.agbi.biodwh2.ttd.etl.TTDReconExporter;
 import de.unibi.agbi.biodwh2.ttd.etl.TTDUpdater;
 
 public class TTDDataSource extends DataSource {
@@ -37,6 +41,11 @@ public class TTDDataSource extends DataSource {
     @Override
     protected GraphExporter<? extends DataSource> getGraphExporter() {
         return new TTDGraphExporter(this);
+    }
+
+    @Override
+    public ReconExporter<? extends DataSource> getReconExporter() {
+        return new TTDReconExporter(this);
     }
 
     @Override

@@ -52,9 +52,10 @@ public class PTMDGraphExporter extends GraphExporter<PTMDDataSource> {
 
     private void exportEntries(final Workspace workspace, final Graph graph) {
         try {
-            FileUtils.forEachZipEntry(workspace, dataSource, PTMDUpdater.TOTAL_FILE_NAME, "Total.txt",
-                                      ((stream, entry) -> FileUtils.openTsvWithHeader(stream, Entry.class,
-                                                                                      (e) -> exportEntry(graph, e))));
+            FileUtils.forEachZipEntryWithSuffix(workspace, dataSource, PTMDUpdater.TOTAL_FILE_NAME, "Total.txt",
+                                                ((stream, entry) -> FileUtils.openTsvWithHeader(stream, Entry.class,
+                                                                                                (e) -> exportEntry(
+                                                                                                        graph, e))));
         } catch (Exception e) {
             throw new ExporterException("Failed to export '" + PTMDUpdater.TOTAL_FILE_NAME + "'", e);
         }

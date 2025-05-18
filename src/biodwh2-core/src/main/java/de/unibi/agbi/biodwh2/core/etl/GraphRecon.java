@@ -21,8 +21,15 @@ public class GraphRecon {
                                                     IndexDescription.Type.UNIQUE));
             graph.addIndex(IndexDescription.forNode(ReconExporter.SYNONYM_LABEL, ReconExporter.NAME_KEY,
                                                     IndexDescription.Type.UNIQUE));
-            for (final var dataSource : dataSources)
+            graph.addIndex(IndexDescription.forNode(ReconExporter.STRUCTURE_LABEL, ReconExporter.INCHI_KEY,
+                                                    IndexDescription.Type.UNIQUE));
+            graph.addIndex(IndexDescription.forNode(ReconExporter.STRUCTURE_LABEL, ReconExporter.MOL_KEY,
+                                                    IndexDescription.Type.UNIQUE));
+            for (final var dataSource : dataSources) {
+                if (LOGGER.isInfoEnabled())
+                    LOGGER.info("Recon of data source '{}' started", dataSource.getId());
                 dataSource.getReconExporter().recon(workspace, graph);
+            }
         } catch (final Exception ex) {
             throw new ReconException(ex);
         }

@@ -5,6 +5,7 @@ import de.unibi.agbi.biodwh2.core.Workspace;
 import de.unibi.agbi.biodwh2.core.exceptions.ReconException;
 import de.unibi.agbi.biodwh2.core.model.graph.Edge;
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 
 public abstract class ReconExporter<D extends DataSource> {
@@ -13,6 +14,10 @@ public abstract class ReconExporter<D extends DataSource> {
     public static final String STRUCTURE_LABEL = "Structure";
     public static final String ID_KEY = "id";
     public static final String NAME_KEY = "name";
+    public static final String INCHI_KEY = "inchi";
+    public static final String MOL_KEY = "mol";
+    public static final String INCHIKEY_PREFIX = "InChIKey";
+    public static final String SMILES_PREFIX = "SMILES";
 
     protected final D dataSource;
 
@@ -23,6 +28,27 @@ public abstract class ReconExporter<D extends DataSource> {
     public abstract long getReconVersion();
 
     public abstract void recon(final Workspace workspace, final Graph graph) throws ReconException;
+
+    protected Long createStructureFromInchi(final Graph graph, String inchi) {
+        if (StringUtils.isBlank(inchi))
+            return null;
+        inchi = StringUtils.strip(inchi);
+        if (!inchi.startsWith("InChI="))
+            inchi = "InChI=" + inchi;
+        var node = graph.findNode(STRUCTURE_LABEL, INCHI_KEY, inchi);
+        if (node == null)
+            node = graph.addNode(STRUCTURE_LABEL, INCHI_KEY, inchi);
+        return node.getId();
+    }
+
+    protected Long createStructureFromMol(final Graph graph, final String mol) {
+        if (StringUtils.isBlank(mol))
+            return null;
+        var node = graph.findNode(STRUCTURE_LABEL, MOL_KEY, mol);
+        if (node == null)
+            node = graph.addNode(STRUCTURE_LABEL, MOL_KEY, mol);
+        return node.getId();
+    }
 
     protected Long createIdentifier(final Graph graph, String id) {
         if (StringUtils.isBlank(id))
@@ -44,13 +70,42 @@ public abstract class ReconExporter<D extends DataSource> {
         return node.getId();
     }
 
-    protected void createXrefOrNameRelation(final Graph graph, String sourceId, String targetId) {
+    protected void createStructureRelationFromInchi(final Graph graph, final String sourceId, final String inchi) {
+        if (StringUtils.isBlank(sourceId) || StringUtils.isBlank(inchi))
+            return;
+        final var sourceNodeId = createIdentifier(graph, sourceId);
+        final var targetNodeId = createStructureFromInchi(graph, inchi);
+        createXrefOrNameRelation(graph, sourceNodeId, targetNodeId);
+    }
+
+    protected void createStructureRelationFromMol(final Graph graph, final String sourceId, final String mol) {
+        if (StringUtils.isBlank(sourceId) || StringUtils.isBlank(mol))
+            return;
+        final var sourceNodeId = createIdentifier(graph, sourceId);
+        final var targetNodeId = createStructureFromMol(graph, mol);
+        createXrefOrNameRelation(graph, sourceNodeId, targetNodeId);
+    }
+
+    protected void createXrefRelation(final Graph graph, final String sourceId, final String targetId) {
         if (StringUtils.isBlank(sourceId) || StringUtils.isBlank(targetId))
             return;
-        sourceId = StringUtils.strip(sourceId);
-        targetId = StringUtils.strip(targetId);
         final var sourceNodeId = createIdentifier(graph, sourceId);
         final var targetNodeId = createIdentifier(graph, targetId);
+        createXrefOrNameRelation(graph, sourceNodeId, targetNodeId);
+    }
+
+    protected void createNameRelation(final Graph graph, final String sourceId, final String name) {
+        createNameRelation(graph, sourceId, name, null);
+    }
+
+    protected void createNameRelation(final Graph graph, final String sourceId, final String name,
+                                      final String[] emptyPlaceholders) {
+        if (StringUtils.isBlank(sourceId) || StringUtils.isBlank(name))
+            return;
+        if (emptyPlaceholders != null && ArrayUtils.contains(emptyPlaceholders, name))
+            return;
+        final var sourceNodeId = createIdentifier(graph, sourceId);
+        final var targetNodeId = createSynonym(graph, name);
         createXrefOrNameRelation(graph, sourceNodeId, targetNodeId);
     }
 
@@ -60,5 +115,11 @@ public abstract class ReconExporter<D extends DataSource> {
         var edge = graph.findEdge(dataSource.getId(), Edge.FROM_ID_FIELD, sourceNodeId, Edge.TO_ID_FIELD, targetNodeId);
         if (edge == null)
             graph.addEdge(sourceNodeId, targetNodeId, dataSource.getId());
+    }
+
+    protected String prefixIdentifier(final String prefix, final String id) {
+        if (StringUtils.isBlank(id))
+            return null;
+        return prefix + ":" + id;
     }
 }

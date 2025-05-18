@@ -23,8 +23,9 @@ public class IIGGraphExporter extends GraphExporter<IIGDataSource> {
     @Override
     protected boolean exportGraph(final Workspace workspace, final Graph graph) throws ExporterException {
         try {
-            FileUtils.forEachZipEntry(dataSource.resolveSourceFilePath(workspace, IIGUpdater.FILE_NAME).toFile(),
-                                      ".csv", ((stream, entry) -> {
+            FileUtils.forEachZipEntryWithSuffix(
+                    dataSource.resolveSourceFilePath(workspace, IIGUpdater.FILE_NAME).toFile(), ".csv",
+                    ((stream, entry) -> {
                         if ("IIR_OCOMM.csv".equals(entry.getName()))
                             FileUtils.openCsvWithHeader(stream, Ingredient.class, graph::addNodeFromModel);
                     }));

@@ -33,12 +33,13 @@ public class LMSDGraphExporter extends GraphExporter<LMSDDataSource> {
         graph.addIndex(IndexDescription.forNode(LIPID_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(LIPID_CLASSIFICATION_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
         try {
-            FileUtils.forEachZipEntry(workspace, dataSource, LMSDUpdater.FILE_NAME, ".sdf", (stream, zipEntry) -> {
-                final var reader = new SdfReader(stream, StandardCharsets.UTF_8);
-                for (final var entry : reader) {
-                    exportEntry(graph, entry);
-                }
-            });
+            FileUtils.forEachZipEntryWithSuffix(workspace, dataSource, LMSDUpdater.FILE_NAME, ".sdf",
+                                                (stream, zipEntry) -> {
+                                                    final var reader = new SdfReader(stream, StandardCharsets.UTF_8);
+                                                    for (final var entry : reader) {
+                                                        exportEntry(graph, entry);
+                                                    }
+                                                });
         } catch (final Exception e) {
             throw new ExporterFormatException("Failed to export '" + LMSDUpdater.FILE_NAME + "'", e);
         }

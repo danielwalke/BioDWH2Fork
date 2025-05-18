@@ -219,7 +219,7 @@ public class WebConfigurator {
         try {
             runThread = new Thread(() -> {
                 final var workspace = new Workspace(workspacePath);
-                workspace.processDataSources(skipUpdate, null);
+                workspace.processDataSources(skipUpdate, false, null);
             });
             runThread.start();
             ctx.json(new HashMap<>());

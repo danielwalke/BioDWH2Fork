@@ -4,6 +4,7 @@ import de.unibi.agbi.biodwh2.core.DataSource;
 import de.unibi.agbi.biodwh2.core.etl.MappingDescriber;
 import de.unibi.agbi.biodwh2.core.model.IdentifierType;
 import de.unibi.agbi.biodwh2.core.model.graph.*;
+import de.unibi.agbi.biodwh2.core.model.graph.mapping.CompoundNodeMappingDescription;
 
 public class CMAUPMappingDescriber extends MappingDescriber {
     public CMAUPMappingDescriber(final DataSource dataSource) {
@@ -22,7 +23,7 @@ public class CMAUPMappingDescriber extends MappingDescriber {
     }
 
     private NodeMappingDescription[] describePlant(final Node node) {
-        final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.TAXON);
+        final var description = new NodeMappingDescription(NodeMappingDescription.NodeType.TAXON);
         description.addName(node.getProperty("name"));
         description.addName(node.getProperty("species_name"));
         final Integer speciesTaxId = node.getProperty("species_tax_id");
@@ -32,7 +33,7 @@ public class CMAUPMappingDescriber extends MappingDescriber {
     }
 
     private NodeMappingDescription[] describeIngredient(final Node node) {
-        final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.COMPOUND);
+        final var description = new CompoundNodeMappingDescription();
         description.addName(node.getProperty("pref_name"));
         description.addName(node.getProperty("iupac_name"));
         description.addIdentifier(IdentifierType.CHEMBL, node.<String>getProperty("chembl_id"));
@@ -41,11 +42,13 @@ public class CMAUPMappingDescriber extends MappingDescriber {
             for (final Integer part : pubchemCid)
                 description.addIdentifier(IdentifierType.PUB_CHEM_COMPOUND, part);
         }
+        description.setInchi(node.getProperty("inchi"));
+        description.setInchiKey(node.getProperty("inchi_key"));
         return new NodeMappingDescription[]{description};
     }
 
     private NodeMappingDescription[] describeTarget(final Node node) {
-        final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.PROTEIN);
+        final var description = new NodeMappingDescription(NodeMappingDescription.NodeType.PROTEIN);
         description.addName(node.getProperty("protein_name"));
         description.addIdentifier(IdentifierType.HGNC_SYMBOL, node.<String>getProperty("gene_symbol"));
         description.addIdentifier(IdentifierType.UNIPROT_KB, node.<String>getProperty("uniprot_id"));

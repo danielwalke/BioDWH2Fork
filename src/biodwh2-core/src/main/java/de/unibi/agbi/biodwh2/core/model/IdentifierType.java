@@ -2,6 +2,8 @@ package de.unibi.agbi.biodwh2.core.model;
 
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.regex.Pattern;
+
 @SuppressWarnings("JavadocLinkAsPlainText")
 public enum IdentifierType {
     /**
@@ -154,6 +156,7 @@ public enum IdentifierType {
     public final Class<?> expectedType;
     public final String bioregistryId;
     public final String localPattern;
+    public final Pattern localPatternCompiled;
     public final boolean trimmed;
 
     IdentifierType(final String prefix, final Class<?> expectedType, final String bioregistryId,
@@ -167,12 +170,33 @@ public enum IdentifierType {
         this.expectedType = expectedType;
         this.bioregistryId = bioregistryId;
         this.localPattern = localPattern;
+        this.localPatternCompiled = localPattern == null ? null : Pattern.compile(localPattern);
         this.trimmed = trimmed;
     }
 
-    public String build(final String id) {
+    public String build(String id) {
         if (StringUtils.isBlank(id))
             return null;
-        return prefix + ':' + id;
+        if (id.startsWith(prefix + ':'))
+            id = id.substring(prefix.length() + 1);
+        return prefix + ':' + (trimmed ? id.strip() : id);
+    }
+
+    public String build(final Integer id) {
+        return id == null ? null : prefix + ':' + id;
+    }
+
+    public boolean matchesLocal(final String id) {
+        if (StringUtils.isBlank(id))
+            return false;
+        return localPatternCompiled.matcher(id).matches();
+    }
+
+    public boolean matchesGlobal(final String id) {
+        if (StringUtils.isBlank(id))
+            return false;
+        if (!id.startsWith(prefix + ":"))
+            return false;
+        return localPatternCompiled.matcher(StringUtils.split(id, ":", 2)[1]).matches();
     }
 }

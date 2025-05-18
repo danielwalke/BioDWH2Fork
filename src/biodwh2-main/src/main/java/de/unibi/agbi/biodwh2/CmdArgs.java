@@ -65,4 +65,6 @@ public class CmdArgs {
             "-wcp", "--web-config-port"
     }, arity = "1", defaultValue = "7070", paramLabel = "<boltPort>", description = "Specifies the web configurator port (default 7070)", order = 104)
     public Integer webConfiguratorPort;
+    @CommandLine.Option(names = {"--recon-only"}, arity = "0", description = "Only perform recon for all data sources", order = 200)
+    public boolean reconOnly;
 }

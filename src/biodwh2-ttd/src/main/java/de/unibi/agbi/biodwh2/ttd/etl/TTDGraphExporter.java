@@ -94,7 +94,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
     private void extractDrugsFromFlatFile(final Workspace workspace, final Map<String, Drug> idDrugMap) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Drug Flat File ...");
-        try (FlatFileTTDReader reader = openFlatFile(workspace, TTDUpdater.DRUG_RAW_FLAT_FILE)) {
+        try (final var reader = openFlatFile(workspace, TTDUpdater.DRUG_RAW_FLAT_FILE)) {
             for (final FlatFileTTDEntry entry : reader) {
                 final String id = entry.getFirst("DRUG__ID");
                 if (id == null)
@@ -125,7 +125,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
     private void extractDrugCrossRefsFromFlatFile(final Workspace workspace, final Map<String, Drug> idDrugMap) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Drug-Crossref Flat File ...");
-        try (FlatFileTTDReader reader = openFlatFile(workspace, TTDUpdater.DRUG_CROSSREF_FLAT_FILE)) {
+        try (final var reader = openFlatFile(workspace, TTDUpdater.DRUG_CROSSREF_FLAT_FILE)) {
             for (final FlatFileTTDEntry entry : reader) {
                 final String id = entry.getFirst("TTDDRUID");
                 if (id == null)
@@ -135,12 +135,12 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
                 drug.casNumber = entry.getFirst("CASNUMBE");
                 drug.formula = entry.getFirst("D_FOMULA");
                 if (entry.properties.get("PUBCHCID") != null)
-                    drug.pubChemCID = getFlatFileEntryArray(entry, "PUBCHCID");
+                    drug.pubChemCID = entry.getArray("PUBCHCID");
                 if (entry.properties.get("PUBCHSID") != null)
-                    drug.pubChemSID = getFlatFileEntryArray(entry, "PUBCHSID");
+                    drug.pubChemSID = entry.getArray("PUBCHSID");
                 drug.chebiId = entry.getFirst("ChEBI_ID");
                 if (entry.properties.get("SUPDRATC") != null)
-                    drug.superDrugATC = getFlatFileEntryArray(entry, "SUPDRATC");
+                    drug.superDrugATC = entry.getArray("SUPDRATC");
                 drug.superDrugCas = entry.getFirst("SUPDRCAS");
             }
         } catch (IOException e) {
@@ -149,19 +149,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
     }
 
     private Drug getOrCreateDrug(final String id, final Map<String, Drug> idDrugMap) {
-        Drug drug = idDrugMap.get(id);
-        if (drug == null) {
-            drug = new Drug(id);
-            idDrugMap.put(id, drug);
-        }
-        return drug;
-    }
-
-    private String[] getFlatFileEntryArray(final FlatFileTTDEntry entry, final String key) {
-        final String[] result = StringUtils.split(entry.getFirst(key), ';');
-        for (int i = 0; i < result.length; i++)
-            result[i] = result[i].trim();
-        return result;
+        return idDrugMap.computeIfAbsent(id, Drug::new);
     }
 
     /**
@@ -170,7 +158,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
     private void extractDrugSynonymsFromFlatFile(final Workspace workspace, final Map<String, Drug> idDrugMap) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Drug-Synonyms Flat File ...");
-        try (FlatFileTTDReader reader = openFlatFile(workspace, TTDUpdater.DRUG_SYNONYMS_FLAT_FILE)) {
+        try (final var reader = openFlatFile(workspace, TTDUpdater.DRUG_SYNONYMS_FLAT_FILE)) {
             for (final FlatFileTTDEntry entry : reader) {
                 final String drugId = entry.getFirst("TTDDRUID");
                 if (drugId != null) {
@@ -190,7 +178,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
     private void extractDrugInfoFromDrugDiseaseFlatFile(final Workspace workspace, final Map<String, Drug> idDrugMap) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Drug-Disease Flat File ...");
-        try (FlatFileWithoutIDTTDReader reader = openFlatFileWithoutId(workspace, TTDUpdater.DRUG_DISEASE_FLAT_FILE)) {
+        try (final var reader = openFlatFileWithoutId(workspace, TTDUpdater.DRUG_DISEASE_FLAT_FILE)) {
             for (final FlatFileTTDEntry entry : reader) {
                 final String drugId = entry.getFirst("TTDDRUID");
                 if (drugId != null) {
@@ -220,7 +208,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
                                        final Map<String, Drug> idDrugMap) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export raw Target Flat File ...");
-        try (FlatFileTTDReader reader = openFlatFile(workspace, TTDUpdater.TARGET_RAW_FLAT_FILE)) {
+        try (final var reader = openFlatFile(workspace, TTDUpdater.TARGET_RAW_FLAT_FILE)) {
             for (final FlatFileTTDEntry entry : reader) {
                 if (entry.properties.get("TARGETID") == null)
                     continue;
@@ -269,10 +257,10 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
         target.geneName = entry.getFirst("GENENAME");
         target.type = entry.getFirst("TARGTYPE");
         if (entry.properties.get("SYNONYMS") != null)
-            target.synonyms = getFlatFileEntryArray(entry, "SYNONYMS");
+            target.synonyms = entry.getArray("SYNONYMS");
         target.function = entry.getFirst("FUNCTION");
         if (entry.properties.get("PDBSTRUC") != null)
-            target.pdbStructures = getFlatFileEntryArray(entry, "PDBSTRUC");
+            target.pdbStructures = entry.getArray("PDBSTRUC");
         target.ecNumber = entry.getFirst("ECNUMBER");
         target.sequence = entry.getFirst("SEQUENCE");
         target.biochemicalClass = entry.getFirst("BIOCLASS");
@@ -309,7 +297,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
     private void extractTargetFlatFileUniProt(final Workspace workspace, final Map<String, Target> idTargetMap) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Target-UniProt Flat File ...");
-        try (FlatFileTTDReader reader = openFlatFile(workspace, TTDUpdater.TARGET_UNIPORT_FLAT_FILE)) {
+        try (final var reader = openFlatFile(workspace, TTDUpdater.TARGET_UNIPORT_FLAT_FILE)) {
             for (final FlatFileTTDEntry entry : reader) {
                 final String id = entry.getFirst("TARGETID");
                 if (id != null) {
@@ -341,7 +329,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
                                                             final Map<String, Target> idTargetMap) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Target-Disease Flat File ...");
-        try (FlatFileTTDReader reader = openFlatFile(workspace, TTDUpdater.TARGET_DISEASE_FLAT_FILE)) {
+        try (final var reader = openFlatFile(workspace, TTDUpdater.TARGET_DISEASE_FLAT_FILE)) {
             for (final FlatFileTTDEntry entry : reader) {
                 final String id = entry.getFirst("TARGETID");
                 if (id != null) {
@@ -418,7 +406,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
     private void exportTargetDiseaseFlatFile(final Workspace workspace, final Graph graph) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Target-Disease Flat File ...");
-        try (FlatFileTTDReader reader = openFlatFile(workspace, TTDUpdater.TARGET_DISEASE_FLAT_FILE)) {
+        try (final var reader = openFlatFile(workspace, TTDUpdater.TARGET_DISEASE_FLAT_FILE)) {
             for (final FlatFileTTDEntry entry : reader) {
                 final String targetId = entry.getFirst("TARGETID");
                 if (targetId == null)
@@ -461,7 +449,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
     private void exportDrugDiseaseFlatFile(final Workspace workspace, final Graph graph) {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Drug-Disease Flat File ...");
-        try (FlatFileWithoutIDTTDReader reader = openFlatFileWithoutId(workspace, TTDUpdater.DRUG_DISEASE_FLAT_FILE)) {
+        try (final var reader = openFlatFileWithoutId(workspace, TTDUpdater.DRUG_DISEASE_FLAT_FILE)) {
             for (final FlatFileTTDEntry entry : reader) {
                 final String drugId = entry.getFirst("TTDDRUID");
                 if (drugId == null)
@@ -492,8 +480,8 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export KEGG pathway Target TSV ...");
         boolean foundHeader = false;
-        try (MappingIterable<KEGGPathwayToTarget> entries = parseTsvFile(workspace, KEGGPathwayToTarget.class,
-                                                                         TTDUpdater.KEGG_PATHWAY_TO_TARGET_TSV)) {
+        try (final var entries = parseTsvFile(workspace, KEGGPathwayToTarget.class,
+                                              TTDUpdater.KEGG_PATHWAY_TO_TARGET_TSV)) {
             for (final KEGGPathwayToTarget entry : entries) {
                 final String targetId = entry.ttdId;
                 if (targetId.equals("TTDID")) {
@@ -524,8 +512,8 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Wiki pathway Target TSV ...");
         boolean foundHeader = false;
-        try (MappingIterable<WikiPathwayToTarget> entries = parseTsvFile(workspace, WikiPathwayToTarget.class,
-                                                                         TTDUpdater.WIKI_PATHWAY_TO_TARGET_TSV)) {
+        try (final var entries = parseTsvFile(workspace, WikiPathwayToTarget.class,
+                                              TTDUpdater.WIKI_PATHWAY_TO_TARGET_TSV)) {
             for (final WikiPathwayToTarget entry : entries) {
                 final String targetId = entry.ttdId;
                 if (targetId.equals("TTDID")) {
@@ -566,11 +554,8 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
                                                                final Map<String, Map<String, TargetDrugEdge>> targetIdNodeEdgeMap,
                                                                final TargetCompoundActivity entry) {
         targetIdNodeEdgeMap.computeIfAbsent(targetId, k -> new HashMap<>());
-        TargetDrugEdge targetDrugEdge = targetIdNodeEdgeMap.get(targetId).get(nodeId);
-        if (targetDrugEdge == null) {
-            targetDrugEdge = new TargetDrugEdge();
-            targetIdNodeEdgeMap.get(targetId).put(nodeId, targetDrugEdge);
-        }
+        TargetDrugEdge targetDrugEdge = targetIdNodeEdgeMap.get(targetId).computeIfAbsent(nodeId,
+                                                                                          k -> new TargetDrugEdge());
         if (targetDrugEdge.activity != null)
             LOGGER.warn("different edges have the same pair");
         targetDrugEdge.activity = entry.activity;
@@ -600,8 +585,8 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
             LOGGER.info("Export Target-Drug activity TSV ...");
         final Map<String, Map<String, TargetDrugEdge>> targetIdCompoundEdgeMap = new HashMap<>();
         final Map<String, Drug> compoundIdDrugMap = new HashMap<>();
-        try (MappingIterable<TargetCompoundActivity> entries = parseTsvFile(workspace, TargetCompoundActivity.class,
-                                                                            TTDUpdater.TARGET_COMPOUND_ACTIVITY_TSV)) {
+        try (final var entries = parseTsvFile(workspace, TargetCompoundActivity.class,
+                                              TTDUpdater.TARGET_COMPOUND_ACTIVITY_TSV)) {
             for (final TargetCompoundActivity entry : entries) {
 
                 final String targetId = entry.ttdTargetId;
@@ -646,8 +631,7 @@ public class TTDGraphExporter extends GraphExporter<TTDDataSource> {
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Export Target-Drug mapping Excel ...");
         try (InputStream stream = FileUtils.openInput(workspace, dataSource, TTDUpdater.TARGET_COMPOUND_MAPPIN_XLSX);
-             XlsxMappingIterator<DrugTargetMapping> mappingIterator = new XlsxMappingIterator<>(DrugTargetMapping.class,
-                                                                                                stream)) {
+             final var mappingIterator = new XlsxMappingIterator<>(DrugTargetMapping.class, stream)) {
             while (mappingIterator.hasNext()) {
                 final DrugTargetMapping entry = mappingIterator.next();
                 final String targetId = entry.targetId;
