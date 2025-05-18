@@ -2,11 +2,14 @@ package de.unibi.agbi.biodwh2.usdaplants.etl;
 
 import de.unibi.agbi.biodwh2.core.Workspace;
 import de.unibi.agbi.biodwh2.core.etl.Updater;
+import de.unibi.agbi.biodwh2.core.exceptions.UpdaterConnectionException;
 import de.unibi.agbi.biodwh2.core.exceptions.UpdaterException;
 import de.unibi.agbi.biodwh2.core.exceptions.UpdaterMalformedVersionException;
 import de.unibi.agbi.biodwh2.core.model.Version;
 import de.unibi.agbi.biodwh2.usdaplants.USDAPlantsDataSource;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,19 +30,38 @@ public class USDAPlantsUpdater extends Updater<USDAPlantsDataSource> {
 
     @Override
     public Version getNewestVersion(final Workspace workspace) throws UpdaterException {
-        var source = getWebsiteSource(VERSION_URL, 3);
+        final var source = getWebsiteSource(VERSION_URL, 3);
         final Matcher mainJSMatcher = MAIN_JS_PATTERN.matcher(source);
         if (mainJSMatcher.find()) {
-            source = getWebsiteSource(MAIN_JS_URL_PREFIX + mainJSMatcher.group(1));
-            final Matcher chunkJSMatcher = CHUNK_JS_PATTERN.matcher(source);
-            while (chunkJSMatcher.find()) {
-                var chunkSource = getWebsiteSource(MAIN_JS_URL_PREFIX + chunkJSMatcher.group(0));
-                final Matcher matcher = VERSION_PATTERN.matcher(chunkSource);
-                if (matcher.find())
-                    return Version.parse(matcher.group(1));
+            final Set<String> remainingChunks = new HashSet<>();
+            remainingChunks.add(mainJSMatcher.group(1));
+            final Set<String> visitedChunks = new HashSet<>();
+            while (!remainingChunks.isEmpty()) {
+                final var fileName = remainingChunks.iterator().next();
+                remainingChunks.remove(fileName);
+                visitedChunks.add(fileName);
+                final var version = collectChunks(fileName, remainingChunks, visitedChunks);
+                if (version != null)
+                    return version;
             }
         } else {
             throw new UpdaterMalformedVersionException("Failed to retrieve versions");
+        }
+        return null;
+    }
+
+    private Version collectChunks(final String fileName, final Set<String> remaining,
+                                  final Set<String> visited) throws UpdaterConnectionException {
+        final var source = getWebsiteSource(MAIN_JS_URL_PREFIX + fileName);
+        final Matcher matcher = VERSION_PATTERN.matcher(source);
+        if (matcher.find())
+            return Version.parse(matcher.group(1));
+        final var chunkJSMatcher = CHUNK_JS_PATTERN.matcher(source);
+        while (chunkJSMatcher.find()) {
+            final var chunkFilename = chunkJSMatcher.group(0);
+            if (!visited.contains(chunkFilename)) {
+                remaining.add(chunkFilename);
+            }
         }
         return null;
     }
