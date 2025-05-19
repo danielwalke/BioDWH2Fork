@@ -12,6 +12,8 @@ import de.unibi.agbi.biodwh2.drugbank.DrugBankDataSource;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class DrugBankUpdater extends Updater<DrugBankDataSource> {
     private static final String FULL_DATABASE_URL_SUFFIX = "/downloads/all-full-database";
@@ -38,7 +40,10 @@ public class DrugBankUpdater extends Updater<DrugBankDataSource> {
         final String password = dataSource.getStringProperty(workspace, "password");
         if (StringUtils.isEmpty(username) || StringUtils.isEmpty(password))
             throw new UpdaterOnlyManuallyException();
-        final String source = getWebsiteSource("https://go.drugbank.com/releases.json", username, password);
+        final Map<String, String> additionalHeaders = new HashMap<>();
+        additionalHeaders.put("Accept", "application/json");
+        final String source = getWebsiteSource("https://go.drugbank.com/releases.json", username, password,
+                                               additionalHeaders, true);
         return parseJsonSource(source);
     }
 

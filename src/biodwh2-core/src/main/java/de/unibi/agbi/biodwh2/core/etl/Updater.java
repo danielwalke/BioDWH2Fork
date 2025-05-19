@@ -2,8 +2,6 @@ package de.unibi.agbi.biodwh2.core.etl;
 
 import de.unibi.agbi.biodwh2.core.DataSource;
 import de.unibi.agbi.biodwh2.core.Workspace;
-import de.unibi.agbi.biodwh2.core.cache.DataSourceVersion;
-import de.unibi.agbi.biodwh2.core.cache.OnlineVersionCache;
 import de.unibi.agbi.biodwh2.core.exceptions.UpdaterConnectionException;
 import de.unibi.agbi.biodwh2.core.exceptions.UpdaterException;
 import de.unibi.agbi.biodwh2.core.io.FileUtils;
@@ -49,19 +47,8 @@ public abstract class Updater<D extends DataSource> {
         try {
             return getNewestVersion(workspace);
         } catch (UpdaterException e) {
-            final DataSourceVersion latest = OnlineVersionCache.getInstance().getLatest(dataSource.getId());
-            if (latest == null || latest.getVersion() == null) {
-                if (LOGGER.isWarnEnabled())
-                    LOGGER.warn(
-                            "Failed to get newest version for data source '{}' directly or from online version cache.",
-                            dataSource.getId(), e);
-            } else {
-                if (LOGGER.isWarnEnabled())
-                    LOGGER.warn(
-                            "Failed to get newest version for data source '{}' directly. Using online version cache instead.",
-                            dataSource.getId(), e.getMessage());
-                return latest.getVersion();
-            }
+            if (LOGGER.isWarnEnabled())
+                LOGGER.warn("Failed to get newest version for data source '{}'", dataSource.getId(), e);
         }
         return null;
     }
@@ -178,6 +165,16 @@ public abstract class Updater<D extends DataSource> {
                                       final boolean useAlternative) throws UpdaterConnectionException {
         try {
             return HTTPClient.getWebsiteSource(url, username, password, 0, null, useAlternative);
+        } catch (IOException e) {
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
+        }
+    }
+
+    protected String getWebsiteSource(final String url, final String username, final String password,
+                                      final Map<String, String> additionalHeaders,
+                                      final boolean useAlternative) throws UpdaterConnectionException {
+        try {
+            return HTTPClient.getWebsiteSource(url, username, password, 0, additionalHeaders, useAlternative);
         } catch (IOException e) {
             throw new UpdaterConnectionException("Failed to retrieve website source", e);
         }

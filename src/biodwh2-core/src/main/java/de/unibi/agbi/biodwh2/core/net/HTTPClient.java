@@ -10,6 +10,7 @@ import org.apache.hc.client5.http.HttpResponseException;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.core5.http.HttpHeaders;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -225,14 +226,17 @@ public final class HTTPClient {
     public static String getWebsiteSource(final String url, final String username, final String password, int retries,
                                           Map<String, String> additionalHeaders,
                                           final boolean useAlternative) throws IOException {
-        if (additionalHeaders == null)
-            additionalHeaders = new HashMap<>();
-        if (!additionalHeaders.containsKey("Accept"))
-            additionalHeaders.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-        if (!additionalHeaders.containsKey("Accept-Language"))
-            additionalHeaders.put("Accept-Language", "en-US,en;q=0.5");
-        if (!additionalHeaders.containsKey("Accept-Encoding"))
-            additionalHeaders.put("Accept-Encoding", "gzip, deflate, br");
+        if (useAlternative) {
+            if (additionalHeaders == null)
+                additionalHeaders = new HashMap<>();
+            if (!additionalHeaders.containsKey(HttpHeaders.ACCEPT))
+                additionalHeaders.put(HttpHeaders.ACCEPT,
+                                      "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            if (!additionalHeaders.containsKey(HttpHeaders.ACCEPT_LANGUAGE))
+                additionalHeaders.put(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.5");
+            if (!additionalHeaders.containsKey(HttpHeaders.ACCEPT_ENCODING))
+                additionalHeaders.put(HttpHeaders.ACCEPT_ENCODING, "gzip");
+        }
         int counter = 0;
         while (counter <= retries) {
             StringBuilder result = new StringBuilder();
