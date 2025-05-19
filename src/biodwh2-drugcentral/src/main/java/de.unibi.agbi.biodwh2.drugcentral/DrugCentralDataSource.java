@@ -7,6 +7,7 @@ import de.unibi.agbi.biodwh2.core.etl.*;
 import de.unibi.agbi.biodwh2.core.text.License;
 import de.unibi.agbi.biodwh2.drugcentral.etl.DrugCentralGraphExporter;
 import de.unibi.agbi.biodwh2.drugcentral.etl.DrugCentralMappingDescriber;
+import de.unibi.agbi.biodwh2.drugcentral.etl.DrugCentralReconExporter;
 import de.unibi.agbi.biodwh2.drugcentral.etl.DrugCentralUpdater;
 
 import java.util.Map;
@@ -56,6 +57,11 @@ public class DrugCentralDataSource extends DataSource {
     @Override
     public GraphExporter<DrugCentralDataSource> getGraphExporter() {
         return new DrugCentralGraphExporter(this);
+    }
+
+    @Override
+    public ReconExporter<? extends DataSource> getReconExporter() {
+        return new DrugCentralReconExporter(this);
     }
 
     @Override

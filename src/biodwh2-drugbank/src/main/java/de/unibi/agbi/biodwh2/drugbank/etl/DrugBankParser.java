@@ -1,11 +1,10 @@
 package de.unibi.agbi.biodwh2.drugbank.etl;
 
-import de.unibi.agbi.biodwh2.core.DataSource;
 import de.unibi.agbi.biodwh2.core.Workspace;
 import de.unibi.agbi.biodwh2.core.etl.Parser;
 import de.unibi.agbi.biodwh2.core.exceptions.ParserException;
-import de.unibi.agbi.biodwh2.core.exceptions.ParserFileNotFoundException;
 import de.unibi.agbi.biodwh2.core.exceptions.ParserFormatException;
+import de.unibi.agbi.biodwh2.core.io.FileUtils;
 import de.unibi.agbi.biodwh2.core.io.sdf.SdfEntry;
 import de.unibi.agbi.biodwh2.core.io.sdf.SdfReader;
 import de.unibi.agbi.biodwh2.drugbank.DrugBankDataSource;
@@ -13,11 +12,8 @@ import de.unibi.agbi.biodwh2.drugbank.model.DrugStructure;
 import de.unibi.agbi.biodwh2.drugbank.model.DrugbankMetaboliteId;
 import de.unibi.agbi.biodwh2.drugbank.model.MetaboliteStructure;
 
-import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 public class DrugBankParser extends Parser<DrugBankDataSource> {
     public DrugBankParser(final DrugBankDataSource dataSource) {
@@ -31,46 +27,19 @@ public class DrugBankParser extends Parser<DrugBankDataSource> {
 
     private boolean parseDrugSdfFile(final Workspace workspace,
                                      final DrugBankDataSource dataSource) throws ParserException {
-        final SdfReader reader = getSdfReaderFromZip(workspace, dataSource, DrugBankUpdater.STRUCTURES_SDF_FILE_NAME);
-        if (reader == null)
-            return false;
-        dataSource.drugStructures = new ArrayList<>();
-        for (final SdfEntry entry : reader)
-            dataSource.drugStructures.add(drugFromSdfEntry(entry));
-        return true;
-    }
-
-    private SdfReader getSdfReaderFromZip(final Workspace workspace, final DataSource dataSource,
-                                          final String fileName) throws ParserException {
-        final var filePath = dataSource.resolveSourceFilePath(workspace, fileName).toFile();
-        if (!filePath.exists())
-            throw new ParserFileNotFoundException(fileName);
-        final ZipInputStream zipInputStream = openZipInputStream(filePath);
         try {
-            ZipEntry zipEntry;
-            while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                if (isZipEntrySdf(zipEntry.getName())) {
-                    return new SdfReader(zipInputStream, StandardCharsets.UTF_8);
-                }
-            }
-        } catch (IOException e) {
-            throw new ParserFormatException("Failed to parse the file '" + fileName + "'", e);
+            FileUtils.forEachZipEntryWithSuffix(workspace, dataSource, DrugBankUpdater.STRUCTURES_SDF_FILE_NAME, ".sdf",
+                                                (stream, e) -> {
+                                                    final var reader = new SdfReader(stream, StandardCharsets.UTF_8);
+                                                    dataSource.drugStructures = new ArrayList<>();
+                                                    for (final SdfEntry entry : reader)
+                                                        dataSource.drugStructures.add(drugFromSdfEntry(entry));
+                                                });
+            return true;
+        } catch (Exception e) {
+            throw new ParserFormatException(
+                    "Failed to parse the file '" + DrugBankUpdater.STRUCTURES_SDF_FILE_NAME + "'", e);
         }
-        return null;
-    }
-
-    private static ZipInputStream openZipInputStream(final File file) throws ParserFileNotFoundException {
-        try {
-            final FileInputStream inputStream = new FileInputStream(file);
-            final BufferedInputStream bufferedInputStream = new BufferedInputStream(inputStream);
-            return new ZipInputStream(bufferedInputStream);
-        } catch (FileNotFoundException e) {
-            throw new ParserFileNotFoundException(file.getName());
-        }
-    }
-
-    private static boolean isZipEntrySdf(final String name) {
-        return name.endsWith(".sdf");
     }
 
     private DrugStructure drugFromSdfEntry(final SdfEntry entry) {
@@ -98,14 +67,21 @@ public class DrugBankParser extends Parser<DrugBankDataSource> {
 
     private boolean parseMetaboliteSdfFile(final Workspace workspace,
                                            final DrugBankDataSource dataSource) throws ParserException {
-        final SdfReader reader = getSdfReaderFromZip(workspace, dataSource,
-                                                     DrugBankUpdater.METABOLITE_STRUCTURES_SDF_FILE_NAME);
-        if (reader == null)
-            return false;
-        dataSource.metaboliteStructures = new ArrayList<>();
-        for (final SdfEntry entry : reader)
-            dataSource.metaboliteStructures.add(metaboliteFromSdfEntry(entry));
-        return true;
+        try {
+            FileUtils.forEachZipEntryWithSuffix(workspace, dataSource,
+                                                DrugBankUpdater.METABOLITE_STRUCTURES_SDF_FILE_NAME, ".sdf",
+                                                (stream, e) -> {
+                                                    final var reader = new SdfReader(stream, StandardCharsets.UTF_8);
+                                                    dataSource.metaboliteStructures = new ArrayList<>();
+                                                    for (final SdfEntry entry : reader)
+                                                        dataSource.metaboliteStructures.add(
+                                                                metaboliteFromSdfEntry(entry));
+                                                });
+            return true;
+        } catch (Exception e) {
+            throw new ParserFormatException(
+                    "Failed to parse the file '" + DrugBankUpdater.METABOLITE_STRUCTURES_SDF_FILE_NAME + "'", e);
+        }
     }
 
     private MetaboliteStructure metaboliteFromSdfEntry(final SdfEntry entry) {

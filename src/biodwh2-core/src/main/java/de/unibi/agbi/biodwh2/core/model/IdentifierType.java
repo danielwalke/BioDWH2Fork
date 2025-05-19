@@ -186,6 +186,10 @@ public enum IdentifierType {
         return id == null ? null : prefix + ':' + id;
     }
 
+    public String build(final Long id) {
+        return id == null ? null : prefix + ':' + id;
+    }
+
     public boolean matchesLocal(final String id) {
         if (StringUtils.isBlank(id))
             return false;
