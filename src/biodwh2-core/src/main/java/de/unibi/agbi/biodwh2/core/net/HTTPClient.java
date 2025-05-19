@@ -6,6 +6,10 @@ import de.unibi.agbi.biodwh2.core.BinaryUtils;
 import de.unibi.agbi.biodwh2.core.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.hc.client5.http.HttpResponseException;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -24,15 +28,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.BiConsumer;
 
 public final class HTTPClient {
     @SuppressWarnings("SpellCheckingInspection")
     public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+    private static final RequestConfig REQUEST_CONFIG = RequestConfig.copy(RequestConfig.DEFAULT).setRedirectsEnabled(
+            true).build();
 
     private HTTPClient() {
     }
@@ -119,35 +122,122 @@ public final class HTTPClient {
         downloadStream(getUrlInputStream(uri, username, password, additionalHeaders), filePath, progressReporter);
     }
 
+    public static void downloadFileAsBrowser(final String uri, final String filePath,
+                                             final boolean useAlternative) throws IOException {
+        final var stream = useAlternative ? getUrlInputStreamAlt(uri) : getUrlInputStream(uri);
+        downloadStream(stream, filePath, null);
+    }
+
+    public static void downloadFileAsBrowser(final String uri, final Path filePath,
+                                             final BiConsumer<Long, Long> progressReporter,
+                                             final boolean useAlternative) throws IOException {
+        final var stream = useAlternative ? getUrlInputStreamAlt(uri) : getUrlInputStream(uri);
+        downloadStream(stream, filePath, progressReporter);
+    }
+
+    public static void downloadFileAsBrowser(final String uri, final String filePath,
+                                             final BiConsumer<Long, Long> progressReporter,
+                                             final boolean useAlternative) throws IOException {
+        final var stream = useAlternative ? getUrlInputStreamAlt(uri) : getUrlInputStream(uri);
+        downloadStream(stream, filePath, progressReporter);
+    }
+
+    public static void downloadFileAsBrowser(final String uri, final String filePath, final String username,
+                                             final String password, final boolean useAlternative) throws IOException {
+        final var stream = useAlternative ? getUrlInputStreamAlt(uri, username, password) : getUrlInputStream(uri,
+                                                                                                              username,
+                                                                                                              password);
+        downloadStream(stream, filePath, null);
+    }
+
+    public static void downloadFileAsBrowser(final String uri, final Path filePath, final String username,
+                                             final String password, final BiConsumer<Long, Long> progressReporter,
+                                             final boolean useAlternative) throws IOException {
+        final var stream = useAlternative ? getUrlInputStreamAlt(uri, username, password) : getUrlInputStream(uri,
+                                                                                                              username,
+                                                                                                              password);
+        downloadStream(stream, filePath, progressReporter);
+    }
+
+    public static void downloadFileAsBrowser(final String uri, final String filePath, final String username,
+                                             final String password, final BiConsumer<Long, Long> progressReporter,
+                                             final boolean useAlternative) throws IOException {
+        final var stream = useAlternative ? getUrlInputStreamAlt(uri, username, password) : getUrlInputStream(uri,
+                                                                                                              username,
+                                                                                                              password);
+        downloadStream(stream, filePath, progressReporter);
+    }
+
+    public static void downloadFileAsBrowser(final String uri, final String filePath, final String username,
+                                             final String password, final Map<String, String> additionalHeaders,
+                                             final boolean useAlternative) throws IOException {
+        final var stream = useAlternative ? getUrlInputStreamAlt(uri, username, password, additionalHeaders) :
+                           getUrlInputStream(uri, username, password, additionalHeaders);
+        downloadStream(stream, filePath, null);
+    }
+
+    public static void downloadFileAsBrowser(final String uri, final Path filePath, final String username,
+                                             final String password, final Map<String, String> additionalHeaders,
+                                             final BiConsumer<Long, Long> progressReporter,
+                                             final boolean useAlternative) throws IOException {
+        final var stream = useAlternative ? getUrlInputStreamAlt(uri, username, password, additionalHeaders) :
+                           getUrlInputStream(uri, username, password, additionalHeaders);
+        downloadStream(stream, filePath, progressReporter);
+    }
+
+    public static void downloadFileAsBrowser(final String uri, final String filePath, final String username,
+                                             final String password, final Map<String, String> additionalHeaders,
+                                             final BiConsumer<Long, Long> progressReporter,
+                                             final boolean useAlternative) throws IOException {
+        final var stream = useAlternative ? getUrlInputStreamAlt(uri, username, password, additionalHeaders) :
+                           getUrlInputStream(uri, username, password, additionalHeaders);
+        downloadStream(stream, filePath, progressReporter);
+    }
+
     public static String getWebsiteSource(final String url) throws IOException {
-        return getWebsiteSource(url, null, null, 0, null);
+        return getWebsiteSource(url, null, null, 0, null, false);
     }
 
     public static String getWebsiteSource(final String url,
                                           final Map<String, String> additionalHeaders) throws IOException {
-        return getWebsiteSource(url, null, null, 0, additionalHeaders);
+        return getWebsiteSource(url, null, null, 0, additionalHeaders, false);
     }
 
     public static String getWebsiteSource(final String url, int retries) throws IOException {
-        return getWebsiteSource(url, null, null, retries, null);
+        return getWebsiteSource(url, null, null, retries, null, false);
     }
 
     public static String getWebsiteSource(final String url, final String username,
                                           final String password) throws IOException {
-        return getWebsiteSource(url, username, password, 0, null);
+        return getWebsiteSource(url, username, password, 0, null, false);
     }
 
     public static String getWebsiteSource(final String url, final String username, final String password,
                                           int retries) throws IOException {
-        return getWebsiteSource(url, username, password, retries, null);
+        return getWebsiteSource(url, username, password, retries, null, false);
     }
 
     public static String getWebsiteSource(final String url, final String username, final String password, int retries,
                                           final Map<String, String> additionalHeaders) throws IOException {
+        return getWebsiteSource(url, username, password, retries, additionalHeaders, false);
+    }
+
+    public static String getWebsiteSource(final String url, final String username, final String password, int retries,
+                                          Map<String, String> additionalHeaders,
+                                          final boolean useAlternative) throws IOException {
+        if (additionalHeaders == null)
+            additionalHeaders = new HashMap<>();
+        if (!additionalHeaders.containsKey("Accept"))
+            additionalHeaders.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        if (!additionalHeaders.containsKey("Accept-Language"))
+            additionalHeaders.put("Accept-Language", "en-US,en;q=0.5");
+        if (!additionalHeaders.containsKey("Accept-Encoding"))
+            additionalHeaders.put("Accept-Encoding", "gzip, deflate, br");
         int counter = 0;
         while (counter <= retries) {
             StringBuilder result = new StringBuilder();
-            try (final var stream = getUrlInputStream(url, username, password, additionalHeaders)) {
+            try (final var stream = useAlternative ? getUrlInputStreamAlt(url, username, password, additionalHeaders) :
+                                    getUrlInputStream(url, username, password, additionalHeaders)) {
                 final var reader = FileUtils.createBufferedReaderFromStream(stream.stream);
                 String inputLine = reader.readLine();
                 while (inputLine != null) {
@@ -200,7 +290,7 @@ public final class HTTPClient {
         return result;
     }
 
-    private static String getBasicAuthForCredentials(final String username, final String password) {
+    public static String getBasicAuthForCredentials(final String username, final String password) {
         final String credentials = username + ":" + password;
         return "Basic " + Base64.getMimeEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)).trim();
     }
@@ -214,6 +304,54 @@ public final class HTTPClient {
         connection.connect();
         connection = redirectURLConnectionIfNecessary(connection);
         return connection;
+    }
+
+    public static StreamWithContentLength getUrlInputStreamAlt(final String url) throws IOException {
+        return getUrlInputStreamAlt(url, null, null, null);
+    }
+
+    public static StreamWithContentLength getUrlInputStreamAlt(final String url, final String username,
+                                                               final String password) throws IOException {
+        return getUrlInputStreamAlt(url, username, password, null);
+    }
+
+    public static StreamWithContentLength getUrlInputStreamAlt(final String url, final String username,
+                                                               final String password,
+                                                               final Map<String, String> additionalHeaders) throws IOException {
+        //noinspection resource
+        final var client = HttpClients.custom().setUserAgent(HTTPClient.USER_AGENT).setDefaultRequestConfig(
+                REQUEST_CONFIG).build();
+        final var request = new HttpGet(url);
+        if (additionalHeaders != null)
+            for (final Map.Entry<String, String> entry : additionalHeaders.entrySet())
+                request.addHeader(entry.getKey(), entry.getValue());
+        request.addHeader("Connection", "keep-alive");
+        request.addHeader("Cache-Control", "max-age=0");
+        request.addHeader("Sec-Fetch-Dest", "document");
+        request.addHeader("Sec-Fetch-Mode", "navigate");
+        request.addHeader("Sec-Fetch-Site", "none");
+        request.addHeader("Sec-Fetch-User", "?1");
+        if (username != null && password != null)
+            request.addHeader("Authorization", HTTPClient.getBasicAuthForCredentials(username, password));
+        final var response = client.executeOpen(null, request, null);
+        final int status = response.getCode();
+        if (status >= 200 && status < 300) {
+            final var entity = response.getEntity();
+            if (entity == null) {
+                throw new IOException("Response entity is null");
+            }
+            final var result = new StreamWithContentLength() {
+                @Override
+                public void close() throws IOException {
+                    super.close();
+                    client.close();
+                }
+            };
+            result.contentLength = entity.getContentLength();
+            result.stream = entity.getContent();
+            return result;
+        }
+        throw new HttpResponseException(status, "Unexpected response status: " + status);
     }
 
     public static String resolveUrlLocation(final String url) throws IOException {

@@ -6,10 +6,13 @@ import de.unibi.agbi.biodwh2.core.exceptions.UpdaterException;
 import de.unibi.agbi.biodwh2.core.model.Version;
 import de.unibi.agbi.biodwh2.core.text.TextUtils;
 import de.unibi.agbi.biodwh2.iig.IIGDataSource;
+import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,7 +31,7 @@ public class IIGUpdater extends Updater<IIGDataSource> {
 
     @Override
     protected Version getNewestVersion(final Workspace workspace) throws UpdaterException {
-        final String source = getWebsiteSource(VERSION_URL);
+        final String source = getWebsiteSource(VERSION_URL, true);
         final Document document = Jsoup.parse(source);
         downloadUrl = null;
         Version newestVersion = null;
@@ -41,7 +44,8 @@ public class IIGUpdater extends Updater<IIGDataSource> {
                                                 TextUtils.monthNameToInt(matcher.group(1).toLowerCase()));
                 if (newestVersion == null || newestVersion.compareTo(version) < 0) {
                     newestVersion = version;
-                    downloadUrl = "https://www.fda.gov/" + link.attr("href");
+                    final var path = StringUtils.replace(link.attr("href"), "//", "/");
+                    downloadUrl = "https://www.fda.gov" + (path.charAt(0) == '/' ? "" : "/") + path;
                 }
             }
         }
@@ -52,7 +56,11 @@ public class IIGUpdater extends Updater<IIGDataSource> {
     protected boolean tryUpdateFiles(final Workspace workspace) throws UpdaterException {
         if (downloadUrl == null)
             return false;
-        downloadFileAsBrowser(workspace, downloadUrl, FILE_NAME);
+        final Map<String, String> additionalHeaders = new HashMap<>();
+        additionalHeaders.put("Accept", "application/zip");
+        additionalHeaders.put("Accept-Language", "en-US,en;q=0.5");
+        additionalHeaders.put("Accept-Encoding", "gzip, deflate, br");
+        downloadFileAsBrowser(workspace, downloadUrl, FILE_NAME, null, null, additionalHeaders, true);
         return true;
     }
 

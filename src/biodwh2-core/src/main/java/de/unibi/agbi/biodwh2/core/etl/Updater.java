@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Map;
 import java.util.function.BiConsumer;
 
 public abstract class Updater<D extends DataSource> {
@@ -151,7 +152,16 @@ public abstract class Updater<D extends DataSource> {
         try {
             return HTTPClient.getWebsiteSource(url);
         } catch (IOException e) {
-            throw new UpdaterConnectionException("Failed to retrieve version", e);
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
+        }
+    }
+
+    protected String getWebsiteSource(final String url,
+                                      final boolean useAlternative) throws UpdaterConnectionException {
+        try {
+            return HTTPClient.getWebsiteSource(url, null, null, 0, null, useAlternative);
+        } catch (IOException e) {
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
         }
     }
 
@@ -160,7 +170,16 @@ public abstract class Updater<D extends DataSource> {
         try {
             return HTTPClient.getWebsiteSource(url, username, password);
         } catch (IOException e) {
-            throw new UpdaterConnectionException("Failed to retrieve version", e);
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
+        }
+    }
+
+    protected String getWebsiteSource(final String url, final String username, final String password,
+                                      final boolean useAlternative) throws UpdaterConnectionException {
+        try {
+            return HTTPClient.getWebsiteSource(url, username, password, 0, null, useAlternative);
+        } catch (IOException e) {
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
         }
     }
 
@@ -169,7 +188,16 @@ public abstract class Updater<D extends DataSource> {
         try {
             return HTTPClient.getWebsiteSource(url, username, password, retries);
         } catch (IOException e) {
-            throw new UpdaterConnectionException("Failed to retrieve version", e);
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
+        }
+    }
+
+    protected String getWebsiteSource(final String url, final String username, final String password, final int retries,
+                                      final boolean useAlternative) throws UpdaterConnectionException {
+        try {
+            return HTTPClient.getWebsiteSource(url, username, password, retries, null, useAlternative);
+        } catch (IOException e) {
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
         }
     }
 
@@ -177,7 +205,16 @@ public abstract class Updater<D extends DataSource> {
         try {
             return HTTPClient.getWebsiteSource(url, retries);
         } catch (IOException e) {
-            throw new UpdaterConnectionException("Failed to retrieve version", e);
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
+        }
+    }
+
+    protected String getWebsiteSource(final String url, final int retries,
+                                      final boolean useAlternative) throws UpdaterConnectionException {
+        try {
+            return HTTPClient.getWebsiteSource(url, null, null, retries, null, useAlternative);
+        } catch (IOException e) {
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
         }
     }
 
@@ -199,6 +236,34 @@ public abstract class Updater<D extends DataSource> {
     protected void downloadFileAsBrowser(final String url, final String fileName, final Path filePath,
                                          final FileUtils.IOConsumer<BiConsumer<Long, Long>> ioConsumer) throws UpdaterException {
         downloadFileAsBrowser(url, fileName, filePath, ioConsumer, 5);
+    }
+
+    protected void downloadFileAsBrowser(final Workspace workspace, final String url, final String fileName,
+                                         final boolean useAlternative) throws UpdaterException {
+        final var filePath = dataSource.resolveSourceFilePath(workspace, fileName);
+        downloadFileAsBrowser(url, fileName, filePath,
+                              (progressReporter) -> HTTPClient.downloadFileAsBrowser(url, filePath, progressReporter,
+                                                                                     useAlternative));
+    }
+
+    protected void downloadFileAsBrowser(final Workspace workspace, final String url, final String fileName,
+                                         final String username, final String password,
+                                         final boolean useAlternative) throws UpdaterException {
+        final var filePath = dataSource.resolveSourceFilePath(workspace, fileName);
+        downloadFileAsBrowser(url, fileName, filePath,
+                              (progressReporter) -> HTTPClient.downloadFileAsBrowser(url, filePath, username, password,
+                                                                                     progressReporter, useAlternative));
+    }
+
+    protected void downloadFileAsBrowser(final Workspace workspace, final String url, final String fileName,
+                                         final String username, final String password,
+                                         final Map<String, String> additionalHeaders,
+                                         final boolean useAlternative) throws UpdaterException {
+        final var filePath = dataSource.resolveSourceFilePath(workspace, fileName);
+        downloadFileAsBrowser(url, fileName, filePath,
+                              (progressReporter) -> HTTPClient.downloadFileAsBrowser(url, filePath, username, password,
+                                                                                     additionalHeaders,
+                                                                                     progressReporter, useAlternative));
     }
 
     protected void downloadFileAsBrowser(final String url, final String fileName, final Path filePath,
