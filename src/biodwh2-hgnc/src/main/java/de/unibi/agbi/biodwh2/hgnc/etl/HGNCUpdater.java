@@ -5,7 +5,6 @@ import de.unibi.agbi.biodwh2.core.Workspace;
 import de.unibi.agbi.biodwh2.core.etl.Updater;
 import de.unibi.agbi.biodwh2.core.exceptions.UpdaterException;
 import de.unibi.agbi.biodwh2.core.model.Version;
-import de.unibi.agbi.biodwh2.core.net.HTTPClient;
 import de.unibi.agbi.biodwh2.hgnc.HGNCDataSource;
 
 import java.io.IOException;
@@ -17,14 +16,14 @@ public class HGNCUpdater extends Updater<HGNCDataSource> {
     private static final String DOWNLOAD_URL_PREFIX = "https://storage.googleapis.com/public-download-files/hgnc/tsv/tsv/";
     static final String FILE_NAME = "hgnc_complete_set.txt";
 
-    public HGNCUpdater(HGNCDataSource dataSource) {
+    public HGNCUpdater(final HGNCDataSource dataSource) {
         super(dataSource);
     }
 
     @Override
-    protected Version getNewestVersion(Workspace workspace) throws UpdaterException {
+    protected Version getNewestVersion(final Workspace workspace) throws UpdaterException {
         try {
-            final String source = HTTPClient.getWebsiteSource(VERSION_URL, Map.of("Accept", "application/json"));
+            final String source = getWebsiteSource(VERSION_URL, Map.of("Accept", "application/json"));
             ObjectMapper mapper = new ObjectMapper();
             final var root = mapper.readTree(source);
             final var lastModifiedNode = root.get("lastModified");
@@ -36,7 +35,7 @@ public class HGNCUpdater extends Updater<HGNCDataSource> {
     }
 
     @Override
-    protected boolean tryUpdateFiles(Workspace workspace) throws UpdaterException {
+    protected boolean tryUpdateFiles(final Workspace workspace) throws UpdaterException {
         downloadFileAsBrowser(workspace, DOWNLOAD_URL_PREFIX + FILE_NAME, FILE_NAME);
         return true;
     }

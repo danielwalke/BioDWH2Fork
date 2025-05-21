@@ -3,12 +3,8 @@ package de.unibi.agbi.biodwh2.t3db.etl;
 import de.unibi.agbi.biodwh2.core.Workspace;
 import de.unibi.agbi.biodwh2.core.etl.Updater;
 import de.unibi.agbi.biodwh2.core.exceptions.UpdaterException;
-import de.unibi.agbi.biodwh2.core.exceptions.UpdaterMalformedVersionException;
 import de.unibi.agbi.biodwh2.core.model.Version;
-import de.unibi.agbi.biodwh2.core.net.HTTPClient;
 import de.unibi.agbi.biodwh2.t3db.T3DBDataSource;
-
-import java.io.IOException;
 
 public class T3DBUpdater extends Updater<T3DBDataSource> {
     private static final String DOWNLOAD_URL_PREFIX = "http://www.t3db.ca/system/downloads/current/";
@@ -27,12 +23,7 @@ public class T3DBUpdater extends Updater<T3DBDataSource> {
 
     @Override
     protected Version getNewestVersion(final Workspace workspace) throws UpdaterException {
-        final String source;
-        try {
-            source = HTTPClient.getWebsiteSource("http://www.t3db.ca/downloads");
-        } catch (IOException e) {
-            throw new UpdaterMalformedVersionException("", e);
-        }
+        final String source = getWebsiteSource("http://www.t3db.ca/downloads", true);
         final String versionPrefix = "T3DB Version <strong>";
         final int index = source.indexOf(versionPrefix);
         if (index != -1) {

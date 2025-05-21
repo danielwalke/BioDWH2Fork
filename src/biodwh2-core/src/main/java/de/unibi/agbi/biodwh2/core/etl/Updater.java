@@ -144,6 +144,15 @@ public abstract class Updater<D extends DataSource> {
     }
 
     protected String getWebsiteSource(final String url,
+                                      final Map<String, String> additionalHeaders) throws UpdaterConnectionException {
+        try {
+            return HTTPClient.getWebsiteSource(url, additionalHeaders);
+        } catch (IOException e) {
+            throw new UpdaterConnectionException("Failed to retrieve website source", e);
+        }
+    }
+
+    protected String getWebsiteSource(final String url,
                                       final boolean useAlternative) throws UpdaterConnectionException {
         try {
             return HTTPClient.getWebsiteSource(url, null, null, 0, null, useAlternative);

@@ -3,6 +3,7 @@ package de.unibi.agbi.biodwh2.nsides.etl;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
 import de.unibi.agbi.biodwh2.core.Workspace;
@@ -36,7 +37,7 @@ public class NSIDESUpdater extends Updater<NSIDESDataSource> {
     @Override
     protected Version getNewestVersion(final Workspace workspace) throws UpdaterConnectionException {
         final String source = getWebsiteSource(BUCKET_LISTING_URL);
-        final var xmlMapper = new XmlMapper();
+        final var xmlMapper = new XmlMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         try {
             final var bucketResult = xmlMapper.readValue(source, ListBucketResult.class);
             LocalDateTime newestDateTime = null;
