@@ -50,8 +50,10 @@ public class NPASSUpdater extends Updater<NPASSDataSource> {
 
     @Override
     protected boolean tryUpdateFiles(final Workspace workspace) throws UpdaterException {
-        for (final var path : downloadUrls)
-            downloadFileAsBrowser(workspace, "https://bidd.group/NPASS/" + path, path.substring(path.indexOf('_') + 1));
+        for (final var path : downloadUrls) {
+            final var startIndex = path.indexOf("download_") + "download_".length();
+            downloadFileAsBrowser(workspace, "https://bidd.group/NPASS/" + path, path.substring(startIndex));
+        }
         return true;
     }
 }

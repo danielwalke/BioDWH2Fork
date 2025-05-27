@@ -66,11 +66,14 @@ public final class ClassMapping {
 
     static final class ClassMappingNumberField extends ClassMappingField {
         final GraphNumberProperty.Type type;
+        final boolean ignoreOnError;
 
         ClassMappingNumberField(final Field field, final String propertyName, final boolean ignoreEmpty,
-                                final String[] emptyPlaceholder, final GraphNumberProperty.Type type) {
+                                final String[] emptyPlaceholder, final GraphNumberProperty.Type type,
+                                final boolean ignoreOnError) {
             super(field, propertyName, ignoreEmpty, emptyPlaceholder, ValueTransformation.NONE);
             this.type = type;
+            this.ignoreOnError = ignoreOnError;
         }
     }
 
@@ -167,7 +170,8 @@ public final class ClassMapping {
         field.setAccessible(true);
         final GraphNumberProperty annotation = field.getAnnotation(GraphNumberProperty.class);
         final var result = new ClassMappingNumberField(field, annotation.value(), annotation.ignoreEmpty(),
-                                                       annotation.emptyPlaceholder(), annotation.type());
+                                                       annotation.emptyPlaceholder(), annotation.type(),
+                                                       annotation.ignoreOnError());
         propertyNameFieldMap.put(field.getName(), result);
         return result;
     }
@@ -318,10 +322,15 @@ public final class ClassMapping {
             final int decimalIndex = valueText.indexOf('.');
             if (decimalIndex > 0)
                 valueText = valueText.substring(0, decimalIndex);
-            if (field.type == GraphNumberProperty.Type.Int)
-                model.setProperty(field.propertyName, Integer.parseInt(valueText));
-            else if (field.type == GraphNumberProperty.Type.Long)
-                model.setProperty(field.propertyName, Long.parseLong(valueText));
+            try {
+                if (field.type == GraphNumberProperty.Type.Int)
+                    model.setProperty(field.propertyName, Integer.parseInt(valueText));
+                else if (field.type == GraphNumberProperty.Type.Long)
+                    model.setProperty(field.propertyName, Long.parseLong(valueText));
+            } catch (final NumberFormatException ex) {
+                if (!field.ignoreOnError)
+                    throw ex;
+            }
         }
     }
 
