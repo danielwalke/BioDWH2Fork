@@ -26,6 +26,5 @@ public class Target {
     @JsonProperty("target_organism")
     public String targetOrganism;
     @JsonProperty("uniprot_id")
-    @GraphProperty(value = "uniprot_id", emptyPlaceholder = "n.a.")
     public String uniProtId;
 }

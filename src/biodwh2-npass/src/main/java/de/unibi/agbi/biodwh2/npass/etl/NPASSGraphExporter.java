@@ -7,7 +7,6 @@ import de.unibi.agbi.biodwh2.core.exceptions.ExporterFormatException;
 import de.unibi.agbi.biodwh2.core.io.FileUtils;
 import de.unibi.agbi.biodwh2.core.model.graph.Graph;
 import de.unibi.agbi.biodwh2.core.model.graph.IndexDescription;
-import de.unibi.agbi.biodwh2.core.model.graph.Node;
 import de.unibi.agbi.biodwh2.npass.NPASSDataSource;
 import de.unibi.agbi.biodwh2.npass.model.*;
 import org.apache.commons.lang3.StringUtils;
@@ -15,10 +14,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class NPASSGraphExporter extends GraphExporter<NPASSDataSource> {
     private static final Logger LOGGER = LogManager.getLogger(NPASSGraphExporter.class);
@@ -40,6 +36,7 @@ public class NPASSGraphExporter extends GraphExporter<NPASSDataSource> {
     protected boolean exportGraph(final Workspace workspace, final Graph graph) throws ExporterException {
         graph.addIndex(IndexDescription.forNode(SPECIES_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(COMPOUND_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(TARGET_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
         final Map<String, Structure> structureMap = new HashMap<>();
         final Map<Integer, List<Long>> taxIdNodeIdsMap = new HashMap<>();
         try {
@@ -69,14 +66,7 @@ public class NPASSGraphExporter extends GraphExporter<NPASSDataSource> {
         for (final String npId : structureMap.keySet()) {
             graph.addNodeFromModel(structureMap.get(npId), ID_KEY, npId);
         }
-        try {
-            if (LOGGER.isInfoEnabled())
-                LOGGER.info("Exporting targets...");
-            FileUtils.openTsvWithHeader(workspace, dataSource, "naturalProducts_targetInfo.txt", Target.class,
-                                        (entry) -> exportTarget(graph, entry, taxIdNodeIdsMap));
-        } catch (final IOException e) {
-            throw new ExporterFormatException("Failed to export 'naturalProducts_targetInfo.txt'", e);
-        }
+        exportTargets(workspace, graph, taxIdNodeIdsMap);
         exportSpeciesCompoundPairs(workspace, graph);
         exportActivities(workspace, graph, taxIdNodeIdsMap);
         return true;
@@ -115,10 +105,38 @@ public class NPASSGraphExporter extends GraphExporter<NPASSDataSource> {
         return parts.isEmpty() ? null : parts.toArray(new Integer[0]);
     }
 
-    private void exportTarget(final Graph graph, final Target entry, final Map<Integer, List<Long>> taxIdNodeIdsMap) {
-        final Node node = graph.addNodeFromModel(entry);
-        if (StringUtils.isNotEmpty(entry.targetOrganismTaxId) && !"n.a.".equalsIgnoreCase(entry.targetOrganismTaxId)) {
-            final var speciesNodeIds = taxIdNodeIdsMap.get(Integer.parseInt(entry.targetOrganismTaxId));
+    private void exportTargets(final Workspace workspace, final Graph graph,
+                               final Map<Integer, List<Long>> taxIdNodeIdsMap) {
+        final Map<String, List<Target>> idTargetsMap = new HashMap<>();
+        try {
+            if (LOGGER.isInfoEnabled())
+                LOGGER.info("Exporting targets...");
+            FileUtils.openTsvWithHeader(workspace, dataSource, "naturalProducts_targetInfo.txt", Target.class,
+                                        (entry) -> idTargetsMap.computeIfAbsent(entry.targetId,
+                                                                                (k) -> new ArrayList<>()).add(entry));
+        } catch (final IOException e) {
+            throw new ExporterFormatException("Failed to export 'naturalProducts_targetInfo.txt'", e);
+        }
+        for (final var entries : idTargetsMap.values())
+            exportTarget(graph, entries, taxIdNodeIdsMap);
+    }
+
+    private void exportTarget(final Graph graph, final List<Target> entries,
+                              final Map<Integer, List<Long>> taxIdNodeIdsMap) {
+        final Set<Integer> organismTaxIds = new HashSet<>();
+        final Set<String> uniProtIds = new HashSet<>();
+        for (final var entry : entries) {
+            if (StringUtils.isNotEmpty(entry.uniProtId) && !"n.a.".equalsIgnoreCase(entry.uniProtId)) {
+                uniProtIds.add(entry.uniProtId);
+            }
+            if (StringUtils.isNotEmpty(entry.targetOrganismTaxId) && !"n.a.".equalsIgnoreCase(
+                    entry.targetOrganismTaxId)) {
+                organismTaxIds.add(Integer.parseInt(entry.targetOrganismTaxId));
+            }
+        }
+        final var node = graph.addNodeFromModel(entries.get(0), "uniprot_ids", uniProtIds.toArray(new String[0]));
+        for (final var organismTaxId : organismTaxIds) {
+            final var speciesNodeIds = taxIdNodeIdsMap.get(organismTaxId);
             if (speciesNodeIds != null)
                 for (final var speciesNodeId : speciesNodeIds)
                     graph.addEdge(node, speciesNodeId, "BELONGS_TO");
