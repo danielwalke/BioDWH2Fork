@@ -47,6 +47,8 @@ public class HGNCGraphExporter extends GraphExporter<HGNCDataSource> {
         graph.addIndex(IndexDescription.forNode(MI_RNA_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(PROTEIN_LABEL, UNIPROT_ID_KEY, IndexDescription.Type.UNIQUE));
         for (final Gene gene : dataSource.genes) {
+            if (StringUtils.isEmpty(gene.hgncId))
+                continue;
             final Node node = graph.addNodeFromModel(gene);
             if (CODING_LOCUS_GROUP.equalsIgnoreCase(gene.locusGroup))
                 exportGeneProteins(graph, gene, node);
