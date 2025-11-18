@@ -14,7 +14,7 @@ public final class ReDOTrialsDBUpdater extends Updater<ReDOTrialsDBDataSource> {
     private static final Pattern VERSION_PATTERN = Pattern.compile(
             "<span id='Last_Import'>\\s*([0-9]{2}/[0-9]{2}/[0-9]{4})", Pattern.CASE_INSENSITIVE);
     static final String FILE_NAME = "ReDO_Trials_DB.txt";
-    private static final String DOWNLOAD_URL = "https://sciencedata.anticancerfund.org/pages/" + FILE_NAME;
+    private static final String DOWNLOAD_URL = "https://data.tp53.org.uk/" + FILE_NAME;
 
     public ReDOTrialsDBUpdater(final ReDOTrialsDBDataSource dataSource) {
         super(dataSource);
@@ -22,7 +22,7 @@ public final class ReDOTrialsDBUpdater extends Updater<ReDOTrialsDBDataSource> {
 
     @Override
     public Version getNewestVersion(final Workspace workspace) throws UpdaterException {
-        final String source = getWebsiteSource("https://www.anticancerfund.org/en/redo-trials-db");
+        final String source = getWebsiteSource("https://data.tp53.org.uk/redo_trials.php");
         final Matcher matcher = VERSION_PATTERN.matcher(source);
         if (matcher.find()) {
             final String[] parts = StringUtils.split(matcher.group(1), '/');

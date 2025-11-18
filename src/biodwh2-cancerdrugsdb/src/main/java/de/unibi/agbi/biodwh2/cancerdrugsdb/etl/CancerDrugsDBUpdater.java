@@ -14,7 +14,7 @@ public class CancerDrugsDBUpdater extends Updater<CancerDrugsDBDataSource> {
     private static final Pattern VERSION_PATTERN = Pattern.compile(
             "Database build date:\\s+([0-9]{2}/[0-9]{2}/[0-9]{2})", Pattern.CASE_INSENSITIVE);
     static final String FILE_NAME = "cancerdrugsdb.txt";
-    private static final String DOWNLOAD_URL = "https://sciencedata.anticancerfund.org/pages/" + FILE_NAME;
+    private static final String DOWNLOAD_URL = "https://data.tp53.org.uk/" + FILE_NAME;
 
     public CancerDrugsDBUpdater(final CancerDrugsDBDataSource dataSource) {
         super(dataSource);
@@ -22,7 +22,7 @@ public class CancerDrugsDBUpdater extends Updater<CancerDrugsDBDataSource> {
 
     @Override
     public Version getNewestVersion(final Workspace workspace) throws UpdaterException {
-        final String source = getWebsiteSource("https://www.anticancerfund.org/en/database-cancer-drugs");
+        final String source = getWebsiteSource("https://data.tp53.org.uk/cancerdrugs.php");
         final Matcher matcher = VERSION_PATTERN.matcher(source);
         if (matcher.find()) {
             final String[] parts = StringUtils.split(matcher.group(1), '/');
