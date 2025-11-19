@@ -31,6 +31,10 @@ public abstract class SingleOBOOntologyDataSource extends OntologyDataSource {
 
     protected abstract Version getVersionFromDataVersionLine(final String dataVersion);
 
+    protected String exporterTransformEntryId(String id) {
+        return id;
+    }
+
     private static class SingleOBOUpdater extends OBOOntologyUpdater<SingleOBOOntologyDataSource> {
         public SingleOBOUpdater(final SingleOBOOntologyDataSource dataSource) {
             super(dataSource);
@@ -70,6 +74,11 @@ public abstract class SingleOBOOntologyDataSource extends OntologyDataSource {
         @Override
         protected String getOntologyFileName() {
             return dataSource.getTargetFileName();
+        }
+
+        @Override
+        protected String transformEntryId(String id) {
+            return dataSource.exporterTransformEntryId(id);
         }
     }
 

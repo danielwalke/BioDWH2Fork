@@ -67,6 +67,13 @@ public class ExperimentalFactorOntologyDataSource extends SingleOBOOntologyDataS
         return FILE_NAME;
     }
 
+    @Override
+    protected String exporterTransformEntryId(final String id) {
+        if (id.startsWith("efo:EFO_"))
+            return "EFO:" + id.substring("efo:EFO_".length());
+        return super.exporterTransformEntryId(id);
+    }
+
     private static class EFOMappingDescriber extends MappingDescriber {
         private Long diseaseNodeId;
 

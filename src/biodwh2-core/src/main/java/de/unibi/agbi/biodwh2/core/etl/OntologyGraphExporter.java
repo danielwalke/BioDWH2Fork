@@ -270,7 +270,7 @@ public abstract class OntologyGraphExporter<D extends OntologyDataSource> extend
     }
 
     private void populateBuilderWithEntry(final NodeBuilder builder, final OboEntry entry) {
-        builder.withProperty(ID_KEY, entry.getId());
+        builder.withProperty(ID_KEY, transformEntryId(entry.getId()));
         builder.withPropertyIfNotNull("def", entry.getDef());
         builder.withPropertyIfNotNull("name", entry.getName());
         builder.withPropertyIfNotNull("namespace", entry.getNamespace());
@@ -283,6 +283,10 @@ public abstract class OntologyGraphExporter<D extends OntologyDataSource> extend
         builder.withPropertyIfNotNull("property_values", entry.getPropertyValues());
         builder.withProperty("obsolete", entry.isObsolete());
         builder.withProperty("anonymous", entry.isAnonymous());
+    }
+    
+    protected String transformEntryId(final String id) {
+        return id;
     }
 
     private void handleRelationshipsWithRelId(final Graph graph, final String[] relationships, final Node entryNode,
