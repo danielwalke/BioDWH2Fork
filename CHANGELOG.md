@@ -1,5 +1,28 @@
 # Changelog
 
+## 📦 Version [v0.6.8](https://github.com/BioDWH2/BioDWH2/releases/tag/v0.6.8)
+
+Released: 21.11.2025
+
+### 📚 Data Sources
+
+* ```[CancerDrugsDB]``` Update download URL
+* ```[ReDO-DB]``` Update download URL
+* ```[ReDOTrialsDB]``` Update download URL
+* ```[CanadianNutrientFile]``` Fix version retrieval
+* ```[ExperimentalFactorOntology]``` Fix Term IDs
+* ```[DrugBank]``` Fix updater
+* ```[IIG]``` Fix updater
+* ```[USDA-PLANTS]``` Fix updater
+* ```[nSIDES]``` Fix updater
+* ```[Gene2Phenotype]``` Fix updater
+* ```[BRENDA]``` Update model and exporter
+* ```[HGNC]``` Update model
+
+### 🔧 Bug fixes and other changes
+
+* ```[feature]``` Improved HTTPClient capabilities
+
 ## 📦 Version [v0.6.7](https://github.com/BioDWH2/BioDWH2/releases/tag/v0.6.7)
 
 Released: 14.02.2025
