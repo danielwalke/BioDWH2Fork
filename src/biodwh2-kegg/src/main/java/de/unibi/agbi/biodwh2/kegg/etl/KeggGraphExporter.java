@@ -29,6 +29,14 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
     static final String GENE_LABEL = "Gene";
     static final String COMPOUND_LABEL = "Compound";
     static final String ORGANISM_LABEL = "Organism";
+    static final String REACTION_LABEL = "Reaction";
+    static final String MODULE_LABEL = "Module";
+    static final String PROTEIN_LABEL = "Protein";
+    static final String PATHWAY_LABEL = "Pathway";
+    static final String ENZYME_LABEL = "Enzyme";
+    static final String BRITE_LABEL = "Brite";
+    static final String GLYCAN_LABEL = "Glycan";
+    static final String RCLASS_LABEL = "RClass";
     static final String TARGETS_LABEL = "TARGETS";
 
     public KeggGraphExporter(final KeggDataSource dataSource) {
@@ -37,7 +45,7 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
 
     @Override
     public long getExportVersion() {
-        return 3;
+        return 8;
     }
 
     @Override
@@ -50,22 +58,39 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         graph.addIndex(IndexDescription.forNode(DRUG_GROUP_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(COMPOUND_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(ORGANISM_LABEL, "id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(REACTION_LABEL, "id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(MODULE_LABEL, "id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(PROTEIN_LABEL, "id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(PATHWAY_LABEL, "id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(ENZYME_LABEL, "id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(BRITE_LABEL, "id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(GLYCAN_LABEL, "id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(RCLASS_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(REFERENCE_LABEL, "pmid", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(REFERENCE_LABEL, "doi", IndexDescription.Type.UNIQUE));
         exportHumanGenesList(workspace, graph);
         exportCompoundsList(workspace, graph);
         exportOrganismsList(workspace, graph);
+        exportReactionsList(workspace, graph);
+        exportModulesList(workspace, graph);
+        exportProteinsList(workspace, graph);
+        exportPathwaysList(workspace, graph);
+        exportEnzymesList(workspace, graph);
+        exportBriteList(workspace, graph);
+        exportGlycanList(workspace, graph);
+        exportRClassList(workspace, graph);
         exportDrugs(graph);
         exportVariants(graph);
         exportDiseases(graph);
         exportNetworks(graph);
         exportDrugGroups(graph);
+        exportLinks(workspace, graph);
         return true;
     }
 
     private void exportHumanGenesList(final Workspace workspace, final Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.HUMAN_GENES_LIST_FILE_NAME))
-            if (row != null && row.length == 2)
+            if (row != null && row.length >= 2)
                 exportHumanGene(graph, row);
     }
 
@@ -81,19 +106,31 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
 
     private void exportHumanGene(final Graph graph, final String[] row) {
         final String id = row[0].trim();
-        if (row[1].contains(";")) {
-            final String[] symbolsAndName = StringUtils.split(row[1], ";", 2);
+        // list/hsa returns 4 columns: id, type, chromosome, name
+        // Fall back to column 1 if only 2 columns present (legacy format)
+        final String nameField = row.length >= 4 ? row[3].trim() : row[1].trim();
+        if (nameField.contains(";")) {
+            final String[] symbolsAndName = StringUtils.split(nameField, ";", 2);
             final String[] symbols = Arrays.stream(StringUtils.split(symbolsAndName[0], ",")).map(String::trim).toArray(
                     String[]::new);
-            graph.addNode(GENE_LABEL, "id", id, "name", symbolsAndName[1].trim(), "symbols", symbols);
-        } else
-            graph.addNode(GENE_LABEL, "id", id, "name", row[1].trim());
+            if (row.length >= 4)
+                graph.addNode(GENE_LABEL, "id", id, "name", symbolsAndName[1].trim(), "symbols", symbols,
+                              "gene_type", row[1].trim(), "chromosome", row[2].trim());
+            else
+                graph.addNode(GENE_LABEL, "id", id, "name", symbolsAndName[1].trim(), "symbols", symbols);
+        } else {
+            if (row.length >= 4)
+                graph.addNode(GENE_LABEL, "id", id, "name", nameField, "gene_type", row[1].trim(),
+                              "chromosome", row[2].trim());
+            else
+                graph.addNode(GENE_LABEL, "id", id, "name", nameField);
+        }
     }
 
     private void exportCompoundsList(Workspace workspace, Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.COMPOUNDS_LIST_FILE_NAME))
             if (row != null && row.length == 2)
-                graph.addNode(COMPOUND_LABEL, "id", StringUtils.split(row[0], ":", 2)[1], "names",
+                graph.addNode(COMPOUND_LABEL, "id", row[0], "names",
                               StringUtils.splitByWholeSeparator(row[1], "; "));
     }
 
@@ -115,6 +152,251 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         }
     }
 
+    private void exportReactionsList(Workspace workspace, Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.REACTIONS_LIST_FILE_NAME))
+            if (row != null && row.length == 2)
+                graph.addNode(REACTION_LABEL, "id", row[0], "name", row[1]);
+    }
+
+    private void exportModulesList(Workspace workspace, Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.MODULES_LIST_FILE_NAME))
+            if (row != null && row.length == 2)
+                graph.addNode(MODULE_LABEL, "id", row[0], "name", row[1]);
+    }
+
+    private void exportProteinsList(Workspace workspace, Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.ORTHOLOGY_LIST_FILE_NAME))
+            if (row != null && row.length == 2)
+                graph.addNode(PROTEIN_LABEL, "id", row[0], "name", row[1]);
+    }
+
+    private void exportPathwaysList(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.PATHWAYS_LIST_FILE_NAME))
+            if (row != null && row.length == 2)
+                graph.addNode(PATHWAY_LABEL, "id", row[0].trim(), "name", row[1].trim());
+    }
+
+    private void exportEnzymesList(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.ENZYMES_LIST_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                // row[0] is bare EC number like "1.1.1.1" (no prefix in this endpoint)
+                final String[] names = StringUtils.splitByWholeSeparator(row[1], "; ");
+                graph.addNode(ENZYME_LABEL, "id", row[0].trim(), "names", names);
+            }
+        }
+    }
+
+    private void exportBriteList(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.BRITE_LIST_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                // row[0] is like "br:br08001" – strip the "br:" prefix for the stored id
+                final String rawId = row[0].trim();
+                final String id = rawId.contains(":") ? StringUtils.split(rawId, ":", 2)[1] : rawId;
+                graph.addNode(BRITE_LABEL, "id", id, "name", row[1].trim());
+            }
+        }
+    }
+
+    private void exportGlycanList(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.GLYCAN_LIST_FILE_NAME))
+            if (row != null && row.length == 2)
+                graph.addNode(GLYCAN_LABEL, "id", row[0].trim(), "name", row[1].trim());
+    }
+
+    private void exportRClassList(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.RCLASS_LIST_FILE_NAME))
+            if (row != null && row.length == 2)
+                graph.addNode(RCLASS_LABEL, "id", row[0].trim(), "name", row[1].trim());
+    }
+
+    private void exportLinks(Workspace workspace, Graph graph) {
+        exportLinkTSV(workspace, graph, KeggUpdater.REACTION_COMPOUND_FILE_NAME, REACTION_LABEL, COMPOUND_LABEL, "ASSOCIATED_WITH_COMPOUND");
+        exportLinkTSV(workspace, graph, KeggUpdater.REACTION_KO_FILE_NAME, REACTION_LABEL, PROTEIN_LABEL, "ASSOCIATED_WITH_PROTEIN");
+        exportLinkTSV(workspace, graph, KeggUpdater.MODULE_REACTION_FILE_NAME, MODULE_LABEL, REACTION_LABEL, "ASSOCIATED_WITH_REACTION");
+        exportLinkTSV(workspace, graph, KeggUpdater.MODULE_KO_FILE_NAME, MODULE_LABEL, PROTEIN_LABEL, "ASSOCIATED_WITH_PROTEIN");
+        exportLinkTSV(workspace, graph, KeggUpdater.MODULE_COMPOUND_FILE_NAME, MODULE_LABEL, COMPOUND_LABEL, "ASSOCIATED_WITH_COMPOUND");
+        exportLinkTSV(workspace, graph, KeggUpdater.PATHWAY_KO_FILE_NAME, PROTEIN_LABEL, PATHWAY_LABEL, "ASSOCIATED_WITH_PATHWAY");
+        exportLinkTSV(workspace, graph, KeggUpdater.PATHWAY_COMPOUND_FILE_NAME, COMPOUND_LABEL, PATHWAY_LABEL, "ASSOCIATED_WITH_PATHWAY");
+        exportDiseaseDrugLinks(workspace, graph);
+        exportDiseaseHsaLinks(workspace, graph);
+        exportReactionEnzymeLinks(workspace, graph);
+        exportUniProtHsaMappings(workspace, graph);
+        exportNcbiProteinIdMappings(workspace, graph);
+        exportGeneProteinLinks(workspace, graph);
+    }
+
+    private void exportLinkTSV(Workspace workspace, Graph graph, String fileName, String label1, String label2, String edgeLabel) {
+        for (final String[] row : openTSV(workspace, fileName)) {
+            if (row != null && row.length == 2) {
+                String id1 = null;
+                String id2 = null;
+                for (String id : row) {
+                    if (id.startsWith(getPrefix(label1))) id1 = stripPrefix(id);
+                    else if (id.startsWith(getPrefix(label2))) id2 = stripPrefix(id);
+                }
+                if (id1 != null && id2 != null) {
+                    Node node1 = graph.findNode(label1, "id", id1);
+                    Node node2 = graph.findNode(label2, "id", id2);
+                    if (node1 != null && node2 != null) {
+                        graph.addEdge(node1, node2, edgeLabel);
+                    }
+                }
+            }
+        }
+    }
+
+    private String getPrefix(String label) {
+        switch (label) {
+            case REACTION_LABEL: return "rn:";
+            case MODULE_LABEL: return "md:";
+            case PROTEIN_LABEL: return "ko:";
+            case COMPOUND_LABEL: return "cpd:";
+            case PATHWAY_LABEL: return "path:";
+            case ENZYME_LABEL: return "ec:";
+            case GLYCAN_LABEL: return "gl:";
+            case RCLASS_LABEL: return "rc:";
+            default: return "";
+        }
+    }
+
+    private String stripPrefix(String id) {
+        if (id.contains(":")) {
+            return StringUtils.split(id, ":", 2)[1];
+        }
+        return id;
+    }
+
+    /**
+     * Exports disease←drug links from link/disease/drug.
+     * Format: dr:D00162  ds:H00342
+     * Disease is stored with id like "H00342" (flat-file ENTRY field, no prefix).
+     * Drug is stored with id like "D00162" (flat-file ENTRY field, no prefix).
+     */
+    private void exportDiseaseDrugLinks(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.DISEASE_DRUG_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                final String drugId = stripPrefix(row[0].trim());   // D00162
+                final String diseaseId = stripPrefix(row[1].trim()); // H00342
+                final Node drugNode = graph.findNode(DRUG_LABEL, "id", drugId);
+                final Node diseaseNode = graph.findNode(DISEASE_LABEL, "id", diseaseId);
+                if (drugNode != null && diseaseNode != null)
+                    graph.addEdge(diseaseNode, drugNode, "ASSOCIATED_WITH_DRUG");
+                else if (LOGGER.isDebugEnabled())
+                    LOGGER.debug("Skipping disease-drug link: drug=" + drugId + " disease=" + diseaseId);
+            }
+        }
+    }
+
+    /**
+     * Exports disease←gene (hsa) links from link/disease/hsa.
+     * Format: hsa:5546  ds:H00021
+     * Gene node id is stored as "hsa:5546" (full prefixed form from /list/hsa).
+     */
+    private void exportDiseaseHsaLinks(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.DISEASE_HSA_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                final String geneKeggId = row[0].trim();            // hsa:5546
+                final String diseaseId = stripPrefix(row[1].trim()); // H00021
+                // Gene nodes are indexed by id = "hsa:5546"
+                final Node geneNode = graph.findNode(GENE_LABEL, "id", geneKeggId);
+                final Node diseaseNode = graph.findNode(DISEASE_LABEL, "id", diseaseId);
+                if (geneNode != null && diseaseNode != null)
+                    graph.addEdge(diseaseNode, geneNode, "ASSOCIATED_WITH_GENE");
+                else if (LOGGER.isDebugEnabled())
+                    LOGGER.debug("Skipping disease-hsa link: gene=" + geneKeggId + " disease=" + diseaseId);
+            }
+        }
+    }
+
+    /**
+     * Exports reaction←enzyme links from link/reaction/enzyme.
+     * Format: ec:1.1.1.1  rn:R02246
+     * Enzyme node id is stored as bare EC number "1.1.1.1" (strip "ec:" prefix).
+     * Reaction node id is stored as "R02246" (strip "rn:" prefix).
+     */
+    private void exportReactionEnzymeLinks(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.REACTION_ENZYME_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                final String enzymeId = stripPrefix(row[0].trim()); // 1.1.1.1
+                final String reactionId = stripPrefix(row[1].trim()); // R02246
+                final Node enzymeNode = graph.findNode(ENZYME_LABEL, "id", enzymeId);
+                final Node reactionNode = graph.findNode(REACTION_LABEL, "id", reactionId);
+                if (enzymeNode != null && reactionNode != null)
+                    graph.addEdge(reactionNode, enzymeNode, "CATALYZED_BY");
+                else if (LOGGER.isDebugEnabled())
+                    LOGGER.debug("Skipping reaction-enzyme link: enzyme=" + enzymeId + " reaction=" + reactionId);
+            }
+        }
+    }
+
+    /**
+     * Exports UniProt accession mappings from conv/uniprot/hsa.
+     * Format: hsa:10458  up:A0A024RBG1
+     * Stores as a property array "uniprot_ids" on the Gene node.
+     */
+    private void exportUniProtHsaMappings(final Workspace workspace, final Graph graph) {
+        final Map<String, List<String>> geneToUniProt = new HashMap<>();
+        for (final String[] row : openTSV(workspace, KeggUpdater.UNIPROT_HSA_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                final String geneKeggId = row[0].trim();      // hsa:10458
+                final String uniprotAcc = stripPrefix(row[1].trim()); // A0A024RBG1
+                geneToUniProt.computeIfAbsent(geneKeggId, k -> new ArrayList<>()).add(uniprotAcc);
+            }
+        }
+        for (final Map.Entry<String, List<String>> entry : geneToUniProt.entrySet()) {
+            final Node geneNode = graph.findNode(GENE_LABEL, "id", entry.getKey());
+            if (geneNode != null) {
+                geneNode.setProperty("uniprot_ids", entry.getValue().toArray(new String[0]));
+                graph.update(geneNode);
+            } else if (LOGGER.isDebugEnabled())
+                LOGGER.debug("Skipping UniProt mapping for unknown gene: " + entry.getKey());
+        }
+    }
+
+    /**
+     * Exports NCBI protein accessions from conv/ncbi-proteinid/hsa.
+     * Format: hsa:1  ncbi-proteinid:NP_570602
+     * Stores as a property array "ncbi_protein_ids" on the Gene node.
+     */
+    private void exportNcbiProteinIdMappings(final Workspace workspace, final Graph graph) {
+        final Map<String, List<String>> geneToNcbi = new HashMap<>();
+        for (final String[] row : openTSV(workspace, KeggUpdater.NCBI_PROTEINID_HSA_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                final String geneKeggId = row[0].trim();       // hsa:1
+                final String ncbiId = stripPrefix(row[1].trim()); // NP_570602
+                geneToNcbi.computeIfAbsent(geneKeggId, k -> new ArrayList<>()).add(ncbiId);
+            }
+        }
+        for (final Map.Entry<String, List<String>> entry : geneToNcbi.entrySet()) {
+            final Node geneNode = graph.findNode(GENE_LABEL, "id", entry.getKey());
+            if (geneNode != null) {
+                geneNode.setProperty("ncbi_protein_ids", entry.getValue().toArray(new String[0]));
+                graph.update(geneNode);
+            } else if (LOGGER.isDebugEnabled())
+                LOGGER.debug("Skipping NCBI protein ID mapping for unknown gene: " + entry.getKey());
+        }
+    }
+
+    /**
+     * Exports Gene→Protein (KO) links from link/ko/hsa.
+     * Format: hsa:10  ko:K00622
+     * Gene node id is stored as "hsa:10", Protein node id is stored as "ko:K00622".
+     */
+    private void exportGeneProteinLinks(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.KO_HSA_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                final String geneKeggId = row[0].trim();             // hsa:10
+                final String proteinId = stripPrefix(row[1].trim()); // K00622 (strip "ko:")
+                final Node geneNode = graph.findNode(GENE_LABEL, "id", geneKeggId);
+                final Node proteinNode = graph.findNode(PROTEIN_LABEL, "id", proteinId);
+                if (geneNode != null && proteinNode != null)
+                    graph.addEdge(geneNode, proteinNode, "ENCODES");
+                else if (LOGGER.isDebugEnabled())
+                    LOGGER.debug("Skipping gene-protein link: gene=" + geneKeggId + " protein=" + proteinId);
+            }
+        }
+    }
+
     private void exportDrugs(final Graph graph) {
         for (final Drug drug : dataSource.drugs)
             exportDrug(graph, drug);
@@ -129,17 +411,39 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         builder.withPropertyIfNotNull("bonds", drug.bonds);
         builder.withPropertyIfNotNull("bracket", drug.bracket);
         builder.withPropertyIfNotNull("name_abbreviation", drug.nameAbbreviation);
+        builder.withPropertyIfNotNull("efficacy", drug.efficacy);
         final Node node = builder.build();
         addAllReferencesForEntry(graph, drug, node);
         for (final Sequence sequence : drug.sequences)
             graph.addEdge(node, graph.addNodeFromModel(sequence), "HAS_SEQUENCE");
         exportDrugGeneRelations(graph, drug, node);
-        // TODO: efficacy
-        // TODO: efficacyDiseases
-        // TODO: classes
-        // TODO: networkTargets
-        // TODO: sources
-        // TODO: mixtures
+        for (final NameIdsPair disease : drug.efficacyDiseases) {
+            final Node diseaseNode = findEntry(graph, disease.ids);
+            if (diseaseNode != null)
+                graph.addEdge(node, diseaseNode, "EFFICACY_DISEASE");
+        }
+        for (final ParentChildRelation classRelation : drug.classes) {
+            final Node classNode = findEntry(graph, classRelation.child.ids);
+            if (classNode != null)
+                graph.addEdge(node, classNode, "BELONGS_TO_CLASS");
+        }
+        for (final NameIdsPair target : drug.networkTargets) {
+            final Node targetNode = findEntry(graph, target.ids);
+            if (targetNode != null)
+                graph.addEdge(node, targetNode, "NETWORK_TARGET");
+        }
+        for (final NameIdsPair source : drug.sources) {
+            final Node sourceNode = findEntry(graph, source.ids);
+            if (sourceNode != null)
+                graph.addEdge(node, sourceNode, "HAS_SOURCE");
+        }
+        for (final List<NameIdsPair> mixture : drug.mixtures) {
+            for (final NameIdsPair component : mixture) {
+                final Node componentNode = findEntry(graph, component.ids);
+                if (componentNode != null)
+                    graph.addEdge(node, componentNode, "HAS_MIXTURE_COMPONENT");
+            }
+        }
     }
 
     private NodeBuilder getNodeBuilderForKeggEntry(final Graph graph, final KeggEntry entry, final String label) {
@@ -250,11 +554,26 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
     private void exportVariant(final Graph graph, final Variant variant) {
         final NodeBuilder builder = getNodeBuilderForKeggEntry(graph, variant, VARIANT_LABEL);
         builder.withPropertyIfNotNull("organism", variant.organism);
-        // TODO: genes
-        // TODO: networks
-        // TODO: variations
+        final List<String> variationStrings = new ArrayList<>();
+        for (final NameIdsPair variation : variant.variations) {
+            variationStrings.add(variation.name + " (" + String.join(", ", variation.ids) + ")");
+        }
+        if (!variationStrings.isEmpty())
+            builder.withProperty("variations", variationStrings.toArray(new String[0]));
+
         final Node node = builder.build();
         addAllReferencesForEntry(graph, variant, node);
+
+        for (final NameIdsPair gene : variant.genes.values()) {
+            final Node geneNode = findEntry(graph, gene.ids);
+            if (geneNode != null)
+                graph.addEdge(node, geneNode, "ASSOCIATED_WITH_GENE");
+        }
+        for (final NetworkLink network : variant.networks) {
+            final Node networkNode = findEntry(graph, network.network.ids);
+            if (networkNode != null)
+                graph.addEdge(node, networkNode, "ASSOCIATED_WITH_NETWORK");
+        }
     }
 
     private void exportDiseases(final Graph graph) {
@@ -281,11 +600,24 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         if (disease.pathogenModules.size() > 0)
             builder.withProperty("pathogen_modules",
                                  disease.pathogenModules.stream().map(Object::toString).toArray(String[]::new));
-        // TODO: networks
-        // TODO: drugs
-        // TODO: genes
         final Node node = builder.build();
         addAllReferencesForEntry(graph, disease, node);
+
+        for (final NetworkLink network : disease.networks) {
+            final Node networkNode = findEntry(graph, network.network.ids);
+            if (networkNode != null)
+                graph.addEdge(node, networkNode, "ASSOCIATED_WITH_NETWORK");
+        }
+        for (final NameIdsPair drug : disease.drugs) {
+            final Node drugNode = findEntry(graph, drug.ids);
+            if (drugNode != null)
+                graph.addEdge(node, drugNode, "ASSOCIATED_WITH_DRUG");
+        }
+        for (final NameIdsPair gene : disease.genes) {
+            final Node geneNode = findEntry(graph, gene.ids);
+            if (geneNode != null)
+                graph.addEdge(node, geneNode, "ASSOCIATED_WITH_GENE");
+        }
     }
 
     private void exportDiseaseHierarchy(final Graph graph, final Map<Long, Set<Long>> addedHierarchyRelationsCache,
@@ -343,17 +675,46 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
     private void exportNetwork(final Graph graph, final Network network) {
         final NodeBuilder builder = getNodeBuilderForKeggEntry(graph, network, NETWORK_LABEL);
         builder.withPropertyIfNotNull("type", network.type);
-        // TODO: definition
-        // TODO: expandedDefinition
-        // TODO: genes
-        // TODO: variants
-        // TODO: diseases
-        // TODO: members
-        // TODO: perturbants
-        // TODO: classes
-        // TODO: metabolites
+        builder.withPropertyIfNotNull("definition", network.definition);
+        builder.withPropertyIfNotNull("expanded_definition", network.expandedDefinition);
         final Node node = builder.build();
         addAllReferencesForEntry(graph, network, node);
+
+        for (final NameIdsPair gene : network.genes) {
+            final Node geneNode = findEntry(graph, gene.ids);
+            if (geneNode != null)
+                graph.addEdge(node, geneNode, "ASSOCIATED_WITH_GENE");
+        }
+        for (final NameIdsPair variant : network.variants) {
+            final Node variantNode = findEntry(graph, variant.ids);
+            if (variantNode != null)
+                graph.addEdge(node, variantNode, "ASSOCIATED_WITH_VARIANT");
+        }
+        for (final NameIdsPair disease : network.diseases) {
+            final Node diseaseNode = findEntry(graph, disease.ids);
+            if (diseaseNode != null)
+                graph.addEdge(node, diseaseNode, "ASSOCIATED_WITH_DISEASE");
+        }
+        for (final NameIdsPair member : network.members) {
+            final Node memberNode = findEntry(graph, member.ids);
+            if (memberNode != null)
+                graph.addEdge(node, memberNode, "HAS_MEMBER");
+        }
+        for (final NameIdsPair perturbant : network.perturbants) {
+            final Node perturbantNode = findEntry(graph, perturbant.ids);
+            if (perturbantNode != null)
+                graph.addEdge(node, perturbantNode, "HAS_PERTURBANT");
+        }
+        for (final NameIdsPair classPair : network.classes) {
+            final Node classNode = findEntry(graph, classPair.ids);
+            if (classNode != null)
+                graph.addEdge(node, classNode, "BELONGS_TO_CLASS");
+        }
+        for (final NameIdsPair metabolite : network.metabolites) {
+            final Node metaboliteNode = findEntry(graph, metabolite.ids);
+            if (metaboliteNode != null)
+                graph.addEdge(node, metaboliteNode, "ASSOCIATED_WITH_METABOLITE");
+        }
     }
 
     private void exportDrugGroups(final Graph graph) {
@@ -375,7 +736,19 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
 
     private void exportDrugGroupHierarchy(final Graph graph, final Map<Long, Set<Long>> addedHierarchyRelationsCache,
                                           final DrugGroup drugGroup) {
-        // TODO: classes
+        for (final ParentChildRelation classRelation : drugGroup.classes) {
+            final Node parent = classRelation.parent == null ? null : findEntry(graph, classRelation.parent.ids);
+            final Node child = findEntry(graph, classRelation.child.ids);
+            if (parent != null && child != null) {
+                if (!addedHierarchyRelationsCache.containsKey(parent.getId()))
+                    addedHierarchyRelationsCache.put(parent.getId(), new HashSet<>());
+                final Set<Long> childIds = addedHierarchyRelationsCache.get(parent.getId());
+                if (!childIds.contains(child.getId())) {
+                    graph.addEdge(parent, child, "HAS_CLASS");
+                    childIds.add(child.getId());
+                }
+            }
+        }
         for (final ParentChildRelation relation : drugGroup.members) {
             final Node parent = relation.parent == null ? graph.findNode(DRUG_GROUP_LABEL, "id", drugGroup.id) :
                                 findEntry(graph, relation.parent.ids);
