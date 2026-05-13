@@ -95,6 +95,8 @@
         <module>biodwh2-swisslipids</module>
         <module>biodwh2-lmsd</module>
         <module>biodwh2-npass</module>
+        <module>biodwh2-cazy</module>
+        <module>biodwh2-eggnog</module>
     </modules>
 
     <packaging>pom</packaging>

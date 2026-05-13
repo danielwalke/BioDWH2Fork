@@ -38,8 +38,6 @@ public class KeggMappingDescriber extends MappingDescriber {
             return describePathway(node);
         if (KeggGraphExporter.ENZYME_LABEL.equals(localMappingLabel))
             return describeEnzyme(node);
-        if (KeggGraphExporter.GLYCAN_LABEL.equals(localMappingLabel))
-            return describeGlycan(node);
         if (KeggGraphExporter.RCLASS_LABEL.equals(localMappingLabel))
             return describeRClass(node);
         return null;
@@ -127,6 +125,11 @@ public class KeggMappingDescriber extends MappingDescriber {
         final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.TAXON);
         description.addNames(node.<String>getProperty("name"));
         description.addIdentifier(IdentifierType.KEGG, node.<String>getProperty("id"));
+        final String ncbiTaxid = node.getProperty("ncbi_taxid");
+        if (ncbiTaxid != null) {
+            String bareTaxid = ncbiTaxid.replace("NCBITaxon:", "");
+            description.addIdentifier(IdentifierType.NCBI_TAXON, bareTaxid);
+        }
         return new NodeMappingDescription[]{description};
     }
 
@@ -148,6 +151,12 @@ public class KeggMappingDescriber extends MappingDescriber {
         final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.PROTEIN);
         description.addNames(node.<String>getProperty("name"));
         description.addIdentifier(IdentifierType.KEGG, node.<String>getProperty("id"));
+        final String[] uniprotIds = node.getProperty("uniprot_ids");
+        if (uniprotIds != null) {
+            for (String uniprotId : uniprotIds) {
+                description.addIdentifier(IdentifierType.UNIPROT_KB, uniprotId);
+            }
+        }
         return new NodeMappingDescription[]{description};
     }
 
@@ -166,12 +175,6 @@ public class KeggMappingDescriber extends MappingDescriber {
         return new NodeMappingDescription[]{description};
     }
 
-    private NodeMappingDescription[] describeGlycan(final Node node) {
-        final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.COMPOUND);
-        description.addNames(node.<String>getProperty("name"));
-        description.addIdentifier(IdentifierType.KEGG, node.<String>getProperty("id"));
-        return new NodeMappingDescription[]{description};
-    }
 
     private NodeMappingDescription[] describeRClass(final Node node) {
         final NodeMappingDescription description = new NodeMappingDescription("REACTION_CLASS");
@@ -187,7 +190,7 @@ public class KeggMappingDescriber extends MappingDescriber {
                 KeggGraphExporter.DISEASE_LABEL, KeggGraphExporter.COMPOUND_LABEL, KeggGraphExporter.ORGANISM_LABEL,
                 KeggGraphExporter.REACTION_LABEL, KeggGraphExporter.MODULE_LABEL, KeggGraphExporter.PROTEIN_LABEL,
                 KeggGraphExporter.PATHWAY_LABEL, KeggGraphExporter.ENZYME_LABEL,
-                KeggGraphExporter.GLYCAN_LABEL, KeggGraphExporter.RCLASS_LABEL
+                KeggGraphExporter.RCLASS_LABEL
         };
     }
 

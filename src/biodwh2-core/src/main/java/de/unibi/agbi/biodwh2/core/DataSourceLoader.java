@@ -65,14 +65,14 @@ public final class DataSourceLoader {
                     result.keySet().stream().filter(k -> result.get(k) == null).collect(Collectors.toSet()));
             remainingIds.removeAll(failedDataSourceIds);
         }
-        final List<DataSource> sortedResult = new ArrayList<>(result.values());
+        final List<DataSource> sortedResult = result.values().stream().filter(Objects::nonNull).collect(Collectors.toList());
         sortedResult.sort(this::dataSourceOrderComparator);
         return sortedResult.toArray(new DataSource[0]);
     }
 
     public DataSource getDataSourceById(final String id) {
         for (final DataSource dataSource : dataSources)
-            if (dataSource.getId().equals(id))
+            if (dataSource.getId().equalsIgnoreCase(id))
                 return dataSource;
         if (LOGGER.isWarnEnabled())
             LOGGER.warn("Failed to retrieve data source with id '{}'", id);

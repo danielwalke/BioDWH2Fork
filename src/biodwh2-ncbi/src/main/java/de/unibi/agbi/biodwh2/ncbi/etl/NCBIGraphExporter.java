@@ -66,10 +66,10 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
     }
 
     private void exportGeneDatabase(final Workspace workspace, final DataSource dataSource,
-                                    final Graph graph) throws IOException {
+            final Graph graph) throws IOException {
         LOGGER.info("Exporting gene_info.gz...");
         MappingIterator<GeneInfo> geneInfos = FileUtils.openGzipTsv(workspace, dataSource, "gene_info.gz",
-                                                                    GeneInfo.class);
+                GeneInfo.class);
         while (geneInfos.hasNext()) {
             GeneInfo geneInfo = geneInfos.next();
             if (!geneInfo.taxonomyId.equals("9606"))
@@ -86,8 +86,10 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
             setArrayPropertyIfNotDash(geneNode, "xrefs", geneInfo.dbXrefs);
             setArrayPropertyIfNotDash(geneNode, "feature_types", geneInfo.featureType);
             setPropertyIfNotDash(geneNode, "map_location", geneInfo.mapLocation);
-            setPropertyIfNotDash(geneNode, "symbol_from_nomenclature_authority", geneInfo.symbolFromNomenclatureAuthority);
-            setPropertyIfNotDash(geneNode, "full_name_from_nomenclature_authority", geneInfo.fullNameFromNomenclatureAuthority);
+            setPropertyIfNotDash(geneNode, "symbol_from_nomenclature_authority",
+                    geneInfo.symbolFromNomenclatureAuthority);
+            setPropertyIfNotDash(geneNode, "full_name_from_nomenclature_authority",
+                    geneInfo.fullNameFromNomenclatureAuthority);
             setPropertyIfNotDash(geneNode, "nomenclature_status", geneInfo.nomenclatureStatus);
             setArrayPropertyIfNotDash(geneNode, "other_designations", geneInfo.otherDesignations);
             geneIdNodeIdMap.put(geneId, geneNode.getId());
@@ -95,7 +97,7 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         }
         LOGGER.info("Exporting gene2accession.gz...");
         MappingIterator<GeneAccession> accessions = FileUtils.openGzipTsv(workspace, dataSource, "gene2accession.gz",
-                                                                          GeneAccession.class);
+                GeneAccession.class);
         while (accessions.hasNext()) {
             GeneAccession accession = accessions.next();
             if (!accession.taxonomyId.equals("9606"))
@@ -109,7 +111,7 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         }
         LOGGER.info("Exporting gene2go.gz...");
         MappingIterator<GeneGo> goAnnotations = FileUtils.openGzipTsv(workspace, dataSource, "gene2go.gz",
-                                                                      GeneGo.class);
+                GeneGo.class);
         while (goAnnotations.hasNext()) {
             GeneGo go = goAnnotations.next();
             if (!go.taxonomyId.equals("9606"))
@@ -134,7 +136,7 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         }
         LOGGER.info("Exporting gene_group.gz...");
         MappingIterator<GeneRelationship> groups = FileUtils.openGzipTsv(workspace, dataSource, "gene_group.gz",
-                                                                         GeneRelationship.class);
+                GeneRelationship.class);
         while (groups.hasNext()) {
             GeneRelationship group = groups.next();
             if (!group.taxonomyId.equals("9606") || !group.otherTaxonomyId.equals("9606"))
@@ -151,7 +153,7 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         }
         LOGGER.info("Exporting gene_orthologs.gz...");
         MappingIterator<GeneRelationship> orthologs = FileUtils.openGzipTsv(workspace, dataSource, "gene_orthologs.gz",
-                                                                            GeneRelationship.class);
+                GeneRelationship.class);
         while (orthologs.hasNext()) {
             GeneRelationship ortholog = orthologs.next();
             if (!ortholog.taxonomyId.equals("9606") || !ortholog.otherTaxonomyId.equals("9606"))
@@ -168,7 +170,7 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         }
         LOGGER.info("Exporting gene2pubmed.gz...");
         MappingIterator<String[]> genePubMed = FileUtils.openGzipTsv(workspace, dataSource, "gene2pubmed.gz",
-                                                                     String[].class);
+                String[].class);
         long lastGeneId = -1;
         Set<Long> currentPubMedIds = new HashSet<>();
         while (genePubMed.hasNext()) {
@@ -202,18 +204,21 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
                 }
             }
         }
-        
+
         LOGGER.info("Exporting gene2ensembl.gz...");
-        MappingIterator<GeneEnsembl> ensembls = FileUtils.openGzipTsv(workspace, dataSource, "gene2ensembl.gz", GeneEnsembl.class);
+        MappingIterator<GeneEnsembl> ensembls = FileUtils.openGzipTsv(workspace, dataSource, "gene2ensembl.gz",
+                GeneEnsembl.class);
         while (ensembls.hasNext()) {
             GeneEnsembl ensembl = ensembls.next();
-            if (!"9606".equals(ensembl.taxonomyId)) continue;
+            if (!"9606".equals(ensembl.taxonomyId))
+                continue;
             long geneId = Long.parseLong(ensembl.geneId);
             Long internalGeneId = geneIdNodeIdMap.get(geneId);
             if (internalGeneId != null) {
                 Node ensemblNode = graph.addNode("Ensembl");
                 setPropertyIfNotDash(ensemblNode, "ensembl_gene_identifier", ensembl.ensemblGeneIdentifier);
-                setPropertyIfNotDash(ensemblNode, "rna_nucleotide_accession.version", ensembl.rnaNucleotideAccessionVersion);
+                setPropertyIfNotDash(ensemblNode, "rna_nucleotide_accession.version",
+                        ensembl.rnaNucleotideAccessionVersion);
                 setPropertyIfNotDash(ensemblNode, "ensembl_rna_identifier", ensembl.ensemblRnaIdentifier);
                 setPropertyIfNotDash(ensemblNode, "protein_accession.version", ensembl.proteinAccessionVersion);
                 setPropertyIfNotDash(ensemblNode, "ensembl_protein_identifier", ensembl.ensemblProteinIdentifier);
@@ -223,10 +228,12 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         }
 
         LOGGER.info("Exporting mim2gene_medgen...");
-        MappingIterator<Mim2GeneMedgen> mim2genes = FileUtils.openTsv(workspace, dataSource, "mim2gene_medgen", Mim2GeneMedgen.class);
+        MappingIterator<Mim2GeneMedgen> mim2genes = FileUtils.openTsv(workspace, dataSource, "mim2gene_medgen",
+                Mim2GeneMedgen.class);
         while (mim2genes.hasNext()) {
             Mim2GeneMedgen mim2gene = mim2genes.next();
-            if ("-".equals(mim2gene.geneId)) continue;
+            if ("-".equals(mim2gene.geneId))
+                continue;
             long geneId = Long.parseLong(mim2gene.geneId);
             Long internalGeneId = geneIdNodeIdMap.get(geneId);
             if (internalGeneId != null) {
@@ -242,10 +249,12 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         }
 
         LOGGER.info("Exporting gene_history.gz...");
-        MappingIterator<GeneHistory> histories = FileUtils.openGzipTsv(workspace, dataSource, "gene_history.gz", GeneHistory.class);
+        MappingIterator<GeneHistory> histories = FileUtils.openGzipTsv(workspace, dataSource, "gene_history.gz",
+                GeneHistory.class);
         while (histories.hasNext()) {
             GeneHistory history = histories.next();
-            if (!"9606".equals(history.taxonomyId) || "-".equals(history.geneId)) continue;
+            if (!"9606".equals(history.taxonomyId) || "-".equals(history.geneId))
+                continue;
             long geneId = Long.parseLong(history.geneId);
             Long internalGeneId = geneIdNodeIdMap.get(geneId);
             if (internalGeneId != null) {
@@ -259,10 +268,12 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         }
 
         LOGGER.info("Exporting gene_neighbors.gz...");
-        MappingIterator<GeneNeighbor> neighbors = FileUtils.openGzipTsv(workspace, dataSource, "gene_neighbors.gz", GeneNeighbor.class);
+        MappingIterator<GeneNeighbor> neighbors = FileUtils.openGzipTsv(workspace, dataSource, "gene_neighbors.gz",
+                GeneNeighbor.class);
         while (neighbors.hasNext()) {
             GeneNeighbor neighbor = neighbors.next();
-            if (!"9606".equals(neighbor.taxonomyId)) continue;
+            if (!"9606".equals(neighbor.taxonomyId))
+                continue;
             long geneId = Long.parseLong(neighbor.geneId);
             Long internalGeneId = geneIdNodeIdMap.get(geneId);
             if (internalGeneId != null) {
@@ -285,10 +296,12 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         }
 
         LOGGER.info("Exporting gene_refseq_uniprotkb_collab.gz...");
-        MappingIterator<GeneRefseqUniprotkbCollab> collabs = FileUtils.openGzipTsv(workspace, dataSource, "gene_refseq_uniprotkb_collab.gz", GeneRefseqUniprotkbCollab.class);
+        MappingIterator<GeneRefseqUniprotkbCollab> collabs = FileUtils.openGzipTsv(workspace, dataSource,
+                "gene_refseq_uniprotkb_collab.gz", GeneRefseqUniprotkbCollab.class);
         while (collabs.hasNext()) {
             GeneRefseqUniprotkbCollab collab = collabs.next();
-            if (!"9606".equals(collab.ncbiTaxId)) continue;
+            if (!"9606".equals(collab.ncbiTaxId))
+                continue;
             Node collabNode = graph.addNode("RefseqUniprotkbCollab");
             setPropertyIfNotDash(collabNode, "ncbi_protein_accession", collab.ncbiProteinAccession);
             setPropertyIfNotDash(collabNode, "uniprotkb_protein_accession", collab.uniProtKbProteinAccession);
@@ -303,19 +316,19 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         setPropertyIfNotDash(accessionNode, "status", accession.status);
         setLongPropertyIfNotDash(accessionNode, "rna_nucleotide_gi", accession.rnaNucleotideGi);
         setPropertyIfNotDash(accessionNode, "rna_nucleotide_accession.version",
-                             accession.rnaNucleotideAccessionVersion);
+                accession.rnaNucleotideAccessionVersion);
         setLongPropertyIfNotDash(accessionNode, "protein_gi", accession.proteinGi);
         setPropertyIfNotDash(accessionNode, "protein_accession.version", accession.proteinAccessionVersion);
         setLongPropertyIfNotDash(accessionNode, "genomic_nucleotide_gi", accession.genomicNucleotideGi);
         setPropertyIfNotDash(accessionNode, "genomic_nucleotide_accession.version",
-                             accession.genomicNucleotideAccessionVersion);
+                accession.genomicNucleotideAccessionVersion);
         setLongPropertyIfNotDash(accessionNode, "mature_peptide_gi", accession.maturePeptideGi);
         setPropertyIfNotDash(accessionNode, "mature_peptide_accession.version",
-                             accession.maturePeptideAccessionVersion);
+                accession.maturePeptideAccessionVersion);
         setLongPropertyIfNotDash(accessionNode, "start_position_on_the_genomic_accession",
-                                 accession.startPositionOnTheGenomicAccession);
+                accession.startPositionOnTheGenomicAccession);
         setLongPropertyIfNotDash(accessionNode, "end_position_on_the_genomic_accession",
-                                 accession.endPositionOnTheGenomicAccession);
+                accession.endPositionOnTheGenomicAccession);
         setPropertyIfNotDash(accessionNode, "assembly", accession.assembly);
         setPropertyIfNotDash(accessionNode, "orientation", accession.orientation);
         graph.update(accessionNode);
@@ -338,12 +351,12 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
     }
 
     private void exportPubChemDatabase(final Workspace workspace, final DataSource dataSource,
-                                       final Graph graph) throws IOException {
+            final Graph graph) throws IOException {
         final String[] fileNames = dataSource.listSourceFiles(workspace);
         for (final String fileName : fileNames)
             if (fileName.startsWith("Compound_") && fileName.endsWith(".sdf.gz")) {
                 final SdfReader reader = new SdfReader(FileUtils.openGzip(workspace, dataSource, fileName),
-                                                       StandardCharsets.UTF_8);
+                        StandardCharsets.UTF_8);
                 for (final SdfEntry entry : reader)
                     createPubChemCompoundNode(graph, entry);
             }

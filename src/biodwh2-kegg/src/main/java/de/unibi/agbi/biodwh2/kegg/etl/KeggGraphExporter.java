@@ -77,8 +77,7 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         exportPathwaysList(workspace, graph);
         exportEnzymesList(workspace, graph);
         exportBriteList(workspace, graph);
-        exportGlycanList(workspace, graph);
-        exportRClassList(workspace, graph);
+                exportRClassList(workspace, graph);
         exportDrugs(graph);
         exportVariants(graph);
         exportDiseases(graph);
@@ -100,7 +99,9 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                                                                          String[].class);
             return () -> iterator;
         } catch (IOException e) {
-            throw new ExporterFormatException(e);
+            if (LOGGER.isWarnEnabled())
+                LOGGER.warn("Skipping missing or unreadable file '" + fileName + "': " + e.getMessage());
+            return Collections.emptyList();
         }
     }
 
@@ -129,24 +130,43 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
 
     private void exportCompoundsList(Workspace workspace, Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.COMPOUNDS_LIST_FILE_NAME))
-            if (row != null && row.length == 2)
+            if (row != null && row.length >= 2)
                 graph.addNode(COMPOUND_LABEL, "id", row[0], "names",
                               StringUtils.splitByWholeSeparator(row[1], "; "));
     }
 
     private void exportOrganismsList(Workspace workspace, Graph graph) {
+        java.util.Map<String, String> keggToTaxid = new java.util.HashMap<>();
+        String taxonomyFilePath = dataSource.resolveSourceFilePath(workspace, KeggUpdater.TAXONOMY_GENOME_FILE_NAME).toString();
+        if (new java.io.File(taxonomyFilePath).exists()) {
+            try {
+                for (String line : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(taxonomyFilePath))) {
+                    String[] parts = org.apache.commons.lang3.StringUtils.split(line, '	');
+                    if (parts.length == 2) {
+                        keggToTaxid.put(parts[0].replace("gn:", ""), parts[1].replace("taxid:", ""));
+                    }
+                }
+            } catch (java.io.IOException e) {}
+        }
+
         for (final String[] row : openTSV(workspace, KeggUpdater.ORGANISMS_LIST_FILE_NAME)) {
             if (row != null && row.length == 4) {
                 String scientificName = row[2].trim();
+                String organismId = row[0];
+                String taxid = keggToTaxid.get(organismId);
+                String ncbiTaxonProperty = taxid != null ? "NCBITaxon:" + taxid : null;
+                
                 if (scientificName.endsWith(")")) {
                     int commonNameStart = scientificName.lastIndexOf('(');
                     String commonName = scientificName.substring(commonNameStart + 1, scientificName.length() - 1);
                     scientificName = scientificName.substring(0, commonNameStart - 1).trim();
-                    graph.addNode(ORGANISM_LABEL, "id", row[0], "symbol", row[1], "name", scientificName, "common_name",
-                                  commonName, "taxonomy", StringUtils.split(row[3], ';'));
+                    de.unibi.agbi.biodwh2.core.model.graph.NodeBuilder builder = graph.buildNode().withLabel(ORGANISM_LABEL).withProperty("id", organismId).withProperty("symbol", row[1]).withProperty("name", scientificName).withProperty("common_name", commonName).withProperty("taxonomy", StringUtils.split(row[3], ';'));
+                    if (ncbiTaxonProperty != null) builder.withProperty("ncbi_taxid", ncbiTaxonProperty);
+                    builder.build();
                 } else {
-                    graph.addNode(ORGANISM_LABEL, "id", row[0], "symbol", row[1], "name", scientificName, "taxonomy",
-                                  StringUtils.split(row[3], ';'));
+                    de.unibi.agbi.biodwh2.core.model.graph.NodeBuilder builder = graph.buildNode().withLabel(ORGANISM_LABEL).withProperty("id", organismId).withProperty("symbol", row[1]).withProperty("name", scientificName).withProperty("taxonomy", StringUtils.split(row[3], ';'));
+                    if (ncbiTaxonProperty != null) builder.withProperty("ncbi_taxid", ncbiTaxonProperty);
+                    builder.build();
                 }
             }
         }
@@ -154,31 +174,145 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
 
     private void exportReactionsList(Workspace workspace, Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.REACTIONS_LIST_FILE_NAME))
-            if (row != null && row.length == 2)
+            if (row != null && row.length >= 2)
                 graph.addNode(REACTION_LABEL, "id", row[0], "name", row[1]);
+
+        final String filePath = dataSource.resolveSourceFilePath(workspace, KeggUpdater.REACTIONS_FILE_NAME).toString();
+        if (new java.io.File(filePath).exists()) {
+            try {
+                java.util.List<String> lines = java.nio.file.Files.readAllLines(java.nio.file.Paths.get(filePath));
+                String currentReaction = null;
+                for (String line : lines) {
+                    if (line.startsWith("ENTRY ")) {
+                        String[] parts = org.apache.commons.lang3.StringUtils.split(line, " 	");
+                        if (parts.length > 1) {
+                            currentReaction = parts[1];
+                        }
+                    } else if (line.startsWith("EQUATION ") && currentReaction != null) {
+                        String equation = line.substring("EQUATION ".length()).trim();
+                        parseAndAddEquationEdges(graph, currentReaction, equation);
+                    } else if (line.startsWith("///")) {
+                        currentReaction = null;
+                    }
+                }
+            } catch (java.io.IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void parseAndAddEquationEdges(Graph graph, String reactionId, String equation) {
+        de.unibi.agbi.biodwh2.core.model.graph.Node reactionNode = graph.findNode(REACTION_LABEL, "id", reactionId);
+        if (reactionNode == null) return;
+        String[] sides = org.apache.commons.lang3.StringUtils.splitByWholeSeparator(equation, "<=>");
+        if (sides.length > 0) {
+            String[] reactants = org.apache.commons.lang3.StringUtils.splitByWholeSeparator(sides[0].trim(), " + ");
+            for (String reactant : reactants) {
+                addStoichiometryEdge(graph, reactionNode, reactant.trim(), "HAS_REACTANT");
+            }
+        }
+        if (sides.length > 1) {
+            String[] products = org.apache.commons.lang3.StringUtils.splitByWholeSeparator(sides[1].trim(), " + ");
+            for (String product : products) {
+                addStoichiometryEdge(graph, reactionNode, product.trim(), "HAS_PRODUCT");
+            }
+        }
+    }
+
+    private void addStoichiometryEdge(Graph graph, de.unibi.agbi.biodwh2.core.model.graph.Node reactionNode, String compoundPart, String edgeLabel) {
+        if (compoundPart.isEmpty()) return;
+        String stoichiometry = "1";
+        String compoundId = compoundPart;
+        int lastSpaceIndex = compoundPart.lastIndexOf(' ');
+        if (lastSpaceIndex != -1) {
+            stoichiometry = compoundPart.substring(0, lastSpaceIndex).trim();
+            compoundId = compoundPart.substring(lastSpaceIndex + 1).trim();
+        }
+        de.unibi.agbi.biodwh2.core.model.graph.Node compoundNode = graph.findNode(COMPOUND_LABEL, "id", compoundId);
+        if (compoundNode != null) {
+            graph.addEdge(reactionNode, compoundNode, edgeLabel, "stoichiometry", stoichiometry);
+        }
     }
 
     private void exportModulesList(Workspace workspace, Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.MODULES_LIST_FILE_NAME))
-            if (row != null && row.length == 2)
+            if (row != null && row.length >= 2)
                 graph.addNode(MODULE_LABEL, "id", row[0], "name", row[1]);
+
+        final String filePath = dataSource.resolveSourceFilePath(workspace, KeggUpdater.MODULES_FILE_NAME).toString();
+        if (new java.io.File(filePath).exists()) {
+            try {
+                java.util.List<String> lines = java.nio.file.Files.readAllLines(java.nio.file.Paths.get(filePath));
+                String currentModule = null;
+                int currentOrder = 1;
+                boolean inReaction = false;
+                for (String line : lines) {
+                    if (line.startsWith("ENTRY ")) {
+                        String[] parts = org.apache.commons.lang3.StringUtils.split(line, " 	");
+                        if (parts.length > 1) {
+                            currentModule = parts[1];
+                        }
+                        currentOrder = 1;
+                        inReaction = false;
+                    } else if (line.startsWith("REACTION ") || (inReaction && line.startsWith("            "))) {
+                        inReaction = true;
+                        String reactionPart = line.startsWith("REACTION ") ? line.substring("REACTION ".length()).trim() : line.trim();
+                        if (!reactionPart.isEmpty() && reactionPart.contains("->")) {
+                            String[] parts = org.apache.commons.lang3.StringUtils.splitByWholeSeparator(reactionPart, "  ");
+                            de.unibi.agbi.biodwh2.core.model.graph.Node moduleNode = graph.findNode(MODULE_LABEL, "id", currentModule);
+                            if (moduleNode != null && parts.length > 0) {
+                                String[] reactions = org.apache.commons.lang3.StringUtils.split(parts[0].trim(), ",");
+                                for (String reactionId : reactions) {
+                                    de.unibi.agbi.biodwh2.core.model.graph.Node reactionNode = graph.findNode(REACTION_LABEL, "id", reactionId.trim());
+                                    if (reactionNode != null) {
+                                        graph.addEdge(moduleNode, reactionNode, "ASSOCIATED_WITH_REACTION", "order", currentOrder);
+                                    }
+                                }
+                                if (parts.length > 1) {
+                                    String[] compounds = org.apache.commons.lang3.StringUtils.splitByWholeSeparator(parts[1].trim(), " -> ");
+                                    int compOrder = currentOrder;
+                                    for (String compoundId : compounds) {
+                                        for (String singleCompoundId : org.apache.commons.lang3.StringUtils.splitByWholeSeparator(compoundId, " + ")) {
+                                            de.unibi.agbi.biodwh2.core.model.graph.Node compoundNode = graph.findNode(COMPOUND_LABEL, "id", singleCompoundId.trim());
+                                            if (compoundNode != null) {
+                                                graph.addEdge(moduleNode, compoundNode, "ASSOCIATED_WITH_COMPOUND", "order", compOrder);
+                                            }
+                                        }
+                                        compOrder++;
+                                    }
+                                }
+                            }
+                            currentOrder++;
+                        }
+                    } else if (line.startsWith("///")) {
+                        currentModule = null;
+                        currentOrder = 1;
+                        inReaction = false;
+                    } else if (!line.startsWith(" ")) {
+                        inReaction = false;
+                    }
+                }
+            } catch (java.io.IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     private void exportProteinsList(Workspace workspace, Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.ORTHOLOGY_LIST_FILE_NAME))
-            if (row != null && row.length == 2)
+            if (row != null && row.length >= 2)
                 graph.addNode(PROTEIN_LABEL, "id", row[0], "name", row[1]);
     }
 
     private void exportPathwaysList(final Workspace workspace, final Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.PATHWAYS_LIST_FILE_NAME))
-            if (row != null && row.length == 2)
+            if (row != null && row.length >= 2)
                 graph.addNode(PATHWAY_LABEL, "id", row[0].trim(), "name", row[1].trim());
     }
 
     private void exportEnzymesList(final Workspace workspace, final Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.ENZYMES_LIST_FILE_NAME)) {
-            if (row != null && row.length == 2) {
+            if (row != null && row.length >= 2) {
                 // row[0] is bare EC number like "1.1.1.1" (no prefix in this endpoint)
                 final String[] names = StringUtils.splitByWholeSeparator(row[1], "; ");
                 graph.addNode(ENZYME_LABEL, "id", row[0].trim(), "names", names);
@@ -199,13 +333,13 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
 
     private void exportGlycanList(final Workspace workspace, final Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.GLYCAN_LIST_FILE_NAME))
-            if (row != null && row.length == 2)
+            if (row != null && row.length >= 2)
                 graph.addNode(GLYCAN_LABEL, "id", row[0].trim(), "name", row[1].trim());
     }
 
     private void exportRClassList(final Workspace workspace, final Graph graph) {
         for (final String[] row : openTSV(workspace, KeggUpdater.RCLASS_LIST_FILE_NAME))
-            if (row != null && row.length == 2)
+            if (row != null && row.length >= 2)
                 graph.addNode(RCLASS_LABEL, "id", row[0].trim(), "name", row[1].trim());
     }
 
@@ -537,6 +671,8 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
     private Node findEntry(final Graph graph, final String id) {
         if (id.startsWith("HSA"))
             return graph.findNode(GENE_LABEL, "id", id.toLowerCase(Locale.ROOT));
+        if (org.apache.commons.lang3.StringUtils.isNumeric(id))
+            return graph.findNode(GENE_LABEL, "id", "hsa:" + id);
         if (id.startsWith("DG"))
             return graph.findNode(DRUG_GROUP_LABEL, "id", id);
         if (id.startsWith("D"))
@@ -680,10 +816,35 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         final Node node = builder.build();
         addAllReferencesForEntry(graph, network, node);
 
+        Map<String, Integer> geneOrderMap = new HashMap<>();
+        if (network.expandedDefinition != null) {
+            int order = 1;
+            String[] steps = org.apache.commons.lang3.StringUtils.splitByWholeSeparator(network.expandedDefinition, " -> ");
+            for (String step : steps) {
+                String cleanStep = step.replace("(", "").replace(")", "").trim();
+                for (String id : org.apache.commons.lang3.StringUtils.split(cleanStep, ',')) {
+                    geneOrderMap.put(id.trim(), order);
+                }
+                order++;
+            }
+        }
+
         for (final NameIdsPair gene : network.genes) {
             final Node geneNode = findEntry(graph, gene.ids);
-            if (geneNode != null)
-                graph.addEdge(node, geneNode, "ASSOCIATED_WITH_GENE");
+            if (geneNode != null) {
+                Integer order = null;
+                for (String id : gene.ids) {
+                    if (geneOrderMap.containsKey(id)) {
+                        order = geneOrderMap.get(id);
+                        break;
+                    }
+                }
+                if (order != null) {
+                    graph.addEdge(node, geneNode, "ASSOCIATED_WITH_GENE", "order", order);
+                } else {
+                    graph.addEdge(node, geneNode, "ASSOCIATED_WITH_GENE");
+                }
+            }
         }
         for (final NameIdsPair variant : network.variants) {
             final Node variantNode = findEntry(graph, variant.ids);
@@ -710,10 +871,13 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
             if (classNode != null)
                 graph.addEdge(node, classNode, "BELONGS_TO_CLASS");
         }
+        int metaboliteOrder = 1;
         for (final NameIdsPair metabolite : network.metabolites) {
-            final Node metaboliteNode = findEntry(graph, metabolite.ids);
-            if (metaboliteNode != null)
-                graph.addEdge(node, metaboliteNode, "ASSOCIATED_WITH_METABOLITE");
+            final de.unibi.agbi.biodwh2.core.model.graph.Node metaboliteNode = findEntry(graph, metabolite.ids);
+            if (metaboliteNode != null) {
+                graph.addEdge(node, metaboliteNode, "ASSOCIATED_WITH_COMPOUND", "order", metaboliteOrder);
+            }
+            metaboliteOrder++;
         }
     }
 
