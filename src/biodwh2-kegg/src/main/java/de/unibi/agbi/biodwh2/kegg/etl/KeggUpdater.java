@@ -60,6 +60,8 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String PATHWAY_KO_FILE_NAME = "pathway_ko.tsv";
     private static final String PATHWAY_COMPOUND_URL = "https://rest.kegg.jp/link/pathway/compound";
     static final String PATHWAY_COMPOUND_FILE_NAME = "pathway_compound.tsv";
+    private static final String PATHWAY_MODULE_URL = "https://rest.kegg.jp/link/pathway/module";
+    static final String PATHWAY_MODULE_FILE_NAME = "pathway_module.tsv";
     private static final String DISEASE_DRUG_URL = "https://rest.kegg.jp/link/disease/drug";
     static final String DISEASE_DRUG_FILE_NAME = "disease_drug.tsv";
     private static final String DISEASE_HSA_URL = "https://rest.kegg.jp/link/disease/hsa";
@@ -76,6 +78,16 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String PATHWAY_REACTION_FILE_NAME = "pathway_reaction.tsv";
     private static final String TAXONOMY_GENOME_URL = "https://rest.kegg.jp/link/taxonomy/genome";
     static final String TAXONOMY_GENOME_FILE_NAME = "taxonomy_genome.tsv";
+    private static final String PATHWAY_GENOME_URL = "https://rest.kegg.jp/link/pathway/genome";
+    static final String PATHWAY_GENOME_FILE_NAME = "pathway_genome.tsv";
+    private static final String PATHWAY_HSA_URL = "https://rest.kegg.jp/link/pathway/hsa";
+    static final String PATHWAY_HSA_FILE_NAME = "pathway_hsa.tsv";
+    // Aggregated per-organism downloads (list/<org> and link/pathway/<org>)
+    static final String GENES_PER_ORGANISM_FILE_NAME = "genes_per_organism.tsv";
+    static final String PATHWAY_PER_ORGANISM_FILE_NAME = "pathway_per_organism.tsv";
+    // Persistent skip-list of organism symbols that KEGG's free public REST API refuses (HTTP 400).
+    // Populated lazily on the first run; afterwards these organisms are skipped without any HTTP call.
+    static final String RESTRICTED_ORGANISMS_FILE_NAME = "restricted_organisms.txt";
     static final String REACTIONS_FILE_NAME = "reactions.txt";
     static final String MODULES_FILE_NAME = "modules.txt";
     static final String ORGANISMS_FILE_NAME = "organisms.txt";
@@ -141,6 +153,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         downloadFileAsBrowser(workspace, MODULE_COMPOUND_URL, MODULE_COMPOUND_FILE_NAME);
         downloadFileAsBrowser(workspace, PATHWAY_KO_URL, PATHWAY_KO_FILE_NAME);
         downloadFileAsBrowser(workspace, PATHWAY_COMPOUND_URL, PATHWAY_COMPOUND_FILE_NAME);
+        downloadFileAsBrowser(workspace, PATHWAY_MODULE_URL, PATHWAY_MODULE_FILE_NAME);
         downloadFileAsBrowser(workspace, DISEASE_DRUG_URL, DISEASE_DRUG_FILE_NAME);
         downloadFileAsBrowser(workspace, DISEASE_HSA_URL, DISEASE_HSA_FILE_NAME);
         downloadFileAsBrowser(workspace, REACTION_ENZYME_URL, REACTION_ENZYME_FILE_NAME);
@@ -149,11 +162,143 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         downloadFileAsBrowser(workspace, KO_HSA_URL, KO_HSA_FILE_NAME);
         downloadFileAsBrowser(workspace, PATHWAY_REACTION_URL, PATHWAY_REACTION_FILE_NAME);
         downloadFileAsBrowser(workspace, TAXONOMY_GENOME_URL, TAXONOMY_GENOME_FILE_NAME);
+        downloadFileAsBrowser(workspace, PATHWAY_GENOME_URL, PATHWAY_GENOME_FILE_NAME);
+        downloadFileAsBrowser(workspace, PATHWAY_HSA_URL, PATHWAY_HSA_FILE_NAME);
         
         downloadKeggEntries(workspace, REACTIONS_LIST_FILE_NAME, REACTIONS_FILE_NAME);
         downloadKeggEntries(workspace, MODULES_LIST_FILE_NAME, MODULES_FILE_NAME);
         downloadKeggEntries(workspace, ORGANISMS_LIST_FILE_NAME, ORGANISMS_FILE_NAME);
+        downloadPerOrganismLinks(workspace);
         return success;
+    }
+
+    /**
+     * Iterates the organisms_list.tsv and aggregates the per-organism KEGG REST endpoints
+     * `list/<org>` and `link/pathway/<org>` into two TSV files:
+     *  - genes_per_organism.tsv: <org>\t<gene_id>\t<name>   (one row per gene)
+     *  - pathway_per_organism.tsv: <gene_id>\t<pathway_id>  (e.g. hsa:10327 \t path:hsa00010)
+     * Throttled at 200 ms per request to avoid hammering the KEGG REST API.
+     * Resumes by skipping already-processed organism prefixes if files exist.
+     */
+    private void downloadPerOrganismLinks(final Workspace workspace) {
+        final String organismsListPath = dataSource.resolveSourceFilePath(workspace, ORGANISMS_LIST_FILE_NAME).toString();
+        if (!new java.io.File(organismsListPath).exists())
+            return;
+        final String genesOutPath = dataSource.resolveSourceFilePath(workspace, GENES_PER_ORGANISM_FILE_NAME).toString();
+        final String pathwayOutPath = dataSource.resolveSourceFilePath(workspace, PATHWAY_PER_ORGANISM_FILE_NAME).toString();
+
+        // Collect already-processed organism symbols to allow resuming an interrupted run
+        final java.util.Set<String> processedGenes = readProcessedSymbols(genesOutPath, 0);
+        final java.util.Set<String> processedPathways = readProcessedPathwaySymbols(pathwayOutPath);
+
+        // Load persistent skip-list of organisms KEGG's free REST API refuses (HTTP 400 on a previous run).
+        // These are silently skipped without any HTTP request on this and future runs.
+        final String restrictedPath = dataSource.resolveSourceFilePath(workspace, RESTRICTED_ORGANISMS_FILE_NAME).toString();
+        final java.util.Set<String> restrictedOrganisms = readProcessedSymbols(restrictedPath, 0);
+
+        final java.util.List<String> organismSymbols = new ArrayList<>();
+        try {
+            for (final String line : java.nio.file.Files.readAllLines(Paths.get(organismsListPath))) {
+                final String[] parts = org.apache.commons.lang3.StringUtils.split(line, '\t');
+                if (parts.length >= 2 && parts[1] != null && !parts[1].isEmpty())
+                    organismSymbols.add(parts[1].trim());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        try (java.io.FileWriter genesWriter = new java.io.FileWriter(genesOutPath, true);
+             java.io.FileWriter pathwayWriter = new java.io.FileWriter(pathwayOutPath, true);
+             java.io.FileWriter restrictedWriter = new java.io.FileWriter(restrictedPath, true)) {
+            int idx = 0;
+            for (final String symbol : organismSymbols) {
+                idx++;
+                // Skip organisms previously confirmed as not available in the free KEGG REST tier.
+                if (restrictedOrganisms.contains(symbol))
+                    continue;
+                try {
+                    if (!processedGenes.contains(symbol)) {
+                        final String genesContent = de.unibi.agbi.biodwh2.core.net.HTTPClient.getWebsiteSource(
+                                "https://rest.kegg.jp/list/" + symbol, 3);
+                        if (genesContent != null) {
+                            for (final String line : genesContent.split("\n")) {
+                                if (line.isEmpty()) continue;
+                                genesWriter.write(symbol);
+                                genesWriter.write('\t');
+                                genesWriter.write(line);
+                                genesWriter.write('\n');
+                            }
+                            genesWriter.flush();
+                        }
+                        try { Thread.sleep(200); } catch (InterruptedException ignore) { Thread.currentThread().interrupt(); }
+                    }
+                    if (!processedPathways.contains(symbol)) {
+                        final String pathwayContent = de.unibi.agbi.biodwh2.core.net.HTTPClient.getWebsiteSource(
+                                "https://rest.kegg.jp/link/pathway/" + symbol, 3);
+                        if (pathwayContent != null) {
+                            pathwayWriter.write(pathwayContent);
+                            if (!pathwayContent.endsWith("\n")) pathwayWriter.write('\n');
+                            pathwayWriter.flush();
+                        }
+                        try { Thread.sleep(200); } catch (InterruptedException ignore) { Thread.currentThread().interrupt(); }
+                    }
+                } catch (Exception e) {
+                    final String msg = e.getMessage();
+                    // KEGG returns HTTP 400 for organisms that are not part of the free public REST API
+                    // (subscription-only / restricted genomes). Record them once so future runs skip
+                    // them entirely without firing any HTTP request.
+                    if (msg != null && msg.contains("response code: 400")) {
+                        if (restrictedOrganisms.add(symbol)) {
+                            try {
+                                restrictedWriter.write(symbol);
+                                restrictedWriter.write('\n');
+                                restrictedWriter.flush();
+                            } catch (IOException ignore) { /* best-effort */ }
+                        }
+                    } else {
+                        System.err.println("Failed to process organism " + symbol + ": " + msg);
+                    }
+                }
+                if (idx % 500 == 0)
+                    System.out.println("[KEGG] per-organism download progress: " + idx + "/" + organismSymbols.size());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private java.util.Set<String> readProcessedSymbols(final String path, final int column) {
+        final java.util.Set<String> result = new java.util.HashSet<>();
+        final java.io.File f = new java.io.File(path);
+        if (!f.exists()) return result;
+        try {
+            for (final String line : java.nio.file.Files.readAllLines(Paths.get(path))) {
+                final String[] parts = org.apache.commons.lang3.StringUtils.split(line, '\t');
+                if (parts.length > column && parts[column] != null)
+                    result.add(parts[column].trim());
+            }
+        } catch (IOException e) { /* ignore */ }
+        return result;
+    }
+
+    /**
+     * In pathway_per_organism.tsv rows have form `hsa:10327\tpath:hsa00010`.
+     * The organism symbol is the prefix before ':' of column 0.
+     */
+    private java.util.Set<String> readProcessedPathwaySymbols(final String path) {
+        final java.util.Set<String> result = new java.util.HashSet<>();
+        final java.io.File f = new java.io.File(path);
+        if (!f.exists()) return result;
+        try {
+            for (final String line : java.nio.file.Files.readAllLines(Paths.get(path))) {
+                final int colon = line.indexOf(':');
+                final int tab = line.indexOf('\t');
+                if (colon > 0 && (tab == -1 || colon < tab))
+                    result.add(line.substring(0, colon).trim());
+            }
+        } catch (IOException e) { /* ignore */ }
+        return result;
     }
     private void downloadKeggEntries(Workspace workspace, String listFileName, String outputFileName) {
         String listFilePath = dataSource.resolveSourceFilePath(workspace, listFileName).toString();
@@ -211,10 +356,12 @@ public class KeggUpdater extends Updater<KeggDataSource> {
                 RCLASS_LIST_FILE_NAME,
                 REACTION_COMPOUND_FILE_NAME, REACTION_KO_FILE_NAME, MODULE_REACTION_FILE_NAME,
                 MODULE_KO_FILE_NAME, MODULE_COMPOUND_FILE_NAME,
-                PATHWAY_KO_FILE_NAME, PATHWAY_COMPOUND_FILE_NAME, PATHWAY_REACTION_FILE_NAME,
+                PATHWAY_KO_FILE_NAME, PATHWAY_COMPOUND_FILE_NAME, PATHWAY_MODULE_FILE_NAME, PATHWAY_REACTION_FILE_NAME,
                 DISEASE_DRUG_FILE_NAME, DISEASE_HSA_FILE_NAME, REACTION_ENZYME_FILE_NAME,
                 UNIPROT_HSA_FILE_NAME, NCBI_PROTEINID_HSA_FILE_NAME, KO_HSA_FILE_NAME,
-                TAXONOMY_GENOME_FILE_NAME, REACTIONS_FILE_NAME, MODULES_FILE_NAME,
+                TAXONOMY_GENOME_FILE_NAME, PATHWAY_GENOME_FILE_NAME, PATHWAY_HSA_FILE_NAME,
+                GENES_PER_ORGANISM_FILE_NAME, PATHWAY_PER_ORGANISM_FILE_NAME,
+                REACTIONS_FILE_NAME, MODULES_FILE_NAME,
                 ORGANISMS_FILE_NAME
         };
     }

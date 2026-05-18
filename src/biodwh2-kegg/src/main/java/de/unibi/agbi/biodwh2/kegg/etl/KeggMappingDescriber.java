@@ -196,8 +196,16 @@ public class KeggMappingDescriber extends MappingDescriber {
 
     @Override
     public PathMappingDescription describe(final Graph graph, final Node[] nodes, final Edge[] edges) {
-        if (edges.length == 1 && edges[0].getLabel().endsWith(KeggGraphExporter.TARGETS_LABEL))
-            return new PathMappingDescription(PathMappingDescription.EdgeType.TARGETS);
+        if (edges.length == 1) {
+            if (edges[0].getLabel().endsWith(KeggGraphExporter.TARGETS_LABEL))
+                return new PathMappingDescription(PathMappingDescription.EdgeType.TARGETS);
+            if (edges[0].getLabel().equals("CONTAINS_PATHWAY"))
+                return new PathMappingDescription(PathMappingDescription.EdgeType.ASSOCIATED_WITH);
+            if (edges[0].getLabel().equals("ASSOCIATED_WITH_PATHWAY"))
+                return new PathMappingDescription(PathMappingDescription.EdgeType.ASSOCIATED_WITH);
+            if (edges[0].getLabel().equals("CONTAINS_GENE"))
+                return new PathMappingDescription(PathMappingDescription.EdgeType.ASSOCIATED_WITH);
+        }
         return null;
     }
 
@@ -207,7 +215,17 @@ public class KeggMappingDescriber extends MappingDescriber {
                 new PathMapping().add(KeggGraphExporter.DRUG_LABEL, KeggGraphExporter.TARGETS_LABEL,
                                       KeggGraphExporter.GENE_LABEL, EdgeDirection.FORWARD),
                 new PathMapping().add(KeggGraphExporter.GENE_LABEL, "ENCODES",
-                                      KeggGraphExporter.PROTEIN_LABEL, EdgeDirection.FORWARD)
+                                      KeggGraphExporter.PROTEIN_LABEL, EdgeDirection.FORWARD),
+                new PathMapping().add(KeggGraphExporter.ORGANISM_LABEL, "CONTAINS_PATHWAY",
+                                      KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD),
+                new PathMapping().add(KeggGraphExporter.GENOME_LABEL, "CONTAINS_PATHWAY",
+                                      KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD),
+                new PathMapping().add(KeggGraphExporter.ORGANISM_LABEL, "HAS_GENOME",
+                                      KeggGraphExporter.GENOME_LABEL, EdgeDirection.FORWARD),
+                new PathMapping().add(KeggGraphExporter.GENE_LABEL, "ASSOCIATED_WITH_PATHWAY",
+                                      KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD),
+                new PathMapping().add(KeggGraphExporter.GENOME_LABEL, "CONTAINS_GENE",
+                                      KeggGraphExporter.GENE_LABEL, EdgeDirection.FORWARD)
         };
     }
 }

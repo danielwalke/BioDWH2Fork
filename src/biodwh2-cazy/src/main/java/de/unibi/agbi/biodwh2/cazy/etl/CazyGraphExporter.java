@@ -30,7 +30,6 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
     static final String ORGANISM_LABEL = "Organism";
     static final String DOMAIN_LABEL = "Domain";
     static final String EC_LABEL = "ECNumber";
-    static final String ENZYME_ACTIVITY_LABEL = "EnzymeActivity";
     static final String CAZY_CLASS_LABEL = "CAZyClass";
     static final String CBM_CLASS_LABEL = "CBM";
 
@@ -49,7 +48,7 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
 
     @Override
     public long getExportVersion() {
-        return 3;
+        return 4;
     }
 
     @Override
@@ -58,11 +57,9 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
         graph.addIndex(IndexDescription.forNode(CAZY_CLASS_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(CBM_CLASS_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(PROTEIN_LABEL, "id", IndexDescription.Type.UNIQUE));
-        graph.addIndex(IndexDescription.forNode(PROTEIN_LABEL, "uniprot_accession", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(ORGANISM_LABEL, "name", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(DOMAIN_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(EC_LABEL, "id", IndexDescription.Type.UNIQUE));
-        graph.addIndex(IndexDescription.forNode(ENZYME_ACTIVITY_LABEL, "id", IndexDescription.Type.UNIQUE));
 
         createCAZyClassNodes(graph);
         createDomainNodes(graph);
@@ -109,9 +106,19 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
         }
     }
 
+    /**
+     * Parse the CAZy bulk data file. Each row has exactly 5 tab-separated columns:
+     * <ol>
+     *   <li>family (e.g. GH1, GT2, CBM4)</li>
+     *   <li>domain (e.g. Bacteria, Eukaryota, Archaea, Viruses)</li>
+     *   <li>organism name</li>
+     *   <li>protein accession ID (NCBI GenBank or JGI ID)</li>
+     *   <li>source database (ncbi or jgi)</li>
+     * </ol>
+     */
     private void processCaZyZipEntry(final java.io.InputStream zipStream, final Graph graph) throws IOException {
-        BoundedCache familyCache = new BoundedCache(CACHE_MAX_SIZE);
-        BoundedCache proteinCache = new BoundedCache(CACHE_MAX_SIZE);
+        final BoundedCache familyCache = new BoundedCache(CACHE_MAX_SIZE);
+        final BoundedCache proteinCache = new BoundedCache(CACHE_MAX_SIZE);
         int count = 0;
         try (final BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(zipStream))) {
             String line;
@@ -127,30 +134,10 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
                 final String domain = cols.length > 1 ? cols[1].trim() : UNCLASSIFIED;
                 final String organism = cols.length > 2 ? cols[2].trim() : "";
                 final String proteinId = cols.length > 3 ? cols[3].trim() : "";
-
-                String genBank = "", uniprot = "", pdb = "", carbLigand = "", ecNumber = "",
-                        knownActivities = "", mechanism = "", clan = "", site = "";
-                if (cols.length > 4)
-                    genBank = cols[4].trim();
-                if (cols.length > 5)
-                    uniprot = cols[5].trim();
-                if (cols.length > 6)
-                    pdb = cols[6].trim();
-                if (cols.length > 7)
-                    carbLigand = cols[7].trim();
-                if (cols.length > 8)
-                    ecNumber = cols[8].trim();
-                if (cols.length > 9)
-                    knownActivities = cols[9].trim();
-                if (cols.length > 10)
-                    mechanism = cols[10].trim();
-                if (cols.length > 11)
-                    clan = cols[11].trim();
-                if (cols.length > 12)
-                    site = cols[12].trim();
+                final String source = cols.length > 4 ? cols[4].trim() : "";
 
                 if (!family.startsWith("GH") && !family.startsWith("GT") && !family.startsWith("PL") &&
-                        !family.startsWith("CE") && !family.startsWith("AA") && !family.startsWith("CBM"))
+                    !family.startsWith("CE") && !family.startsWith("AA") && !family.startsWith("CBM"))
                     continue;
 
                 String classID = family;
@@ -162,7 +149,7 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
                     continue;
                 }
 
-                final String label = CBM_CLASS_LABEL.equals(classID) ? CBM_CLASS_LABEL : CAZY_CLASS_LABEL;
+                final String label = "CBM".equals(classID) ? CBM_CLASS_LABEL : CAZY_CLASS_LABEL;
                 final Node classNode = graph.findNode(label, "id", classID);
                 if (classNode == null)
                     continue;
@@ -185,9 +172,7 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
                 }
 
                 if (!proteinId.isEmpty()) {
-                    final String proteinLabel = !uniprot.isEmpty() ? uniprot : proteinId;
-                    final Long protoId = ensureProteinNode(graph, proteinCache, proteinLabel, genBank, uniprot, pdb,
-                            carbLigand, ecNumber, knownActivities, mechanism, clan, site, organism);
+                    final Long protoId = ensureProteinNode(graph, proteinCache, proteinId, source, organism);
                     if (protoId != null && famId != null) {
                         graph.addEdge(famId, protoId, "HAS_PROTEIN");
                     }
@@ -239,45 +224,32 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
         return newNode != null ? newNode.getId() : null;
     }
 
-    private Long ensureProteinNode(final Graph graph, final BoundedCache cache, final String proteinLabel,
-                                    final String genBank, final String uniprot, final String pdb,
-                                    final String carbLigand, final String ecNumber,
-                                    final String knownActivities, final String mechanism,
-                                    final String clan, final String site, final String organism) {
-        Long id = cache.get(proteinLabel);
+    /**
+     * Create or find a Protein node with the correct properties based on the actual 5-column CAZy data format.
+     *
+     * @param proteinId the protein accession (e.g. "ABN51453.1" for NCBI, "344991" for JGI)
+     * @param source    the source database ("ncbi" or "jgi")
+     * @param organism  the organism name for annotation
+     */
+    private Long ensureProteinNode(final Graph graph, final BoundedCache cache, final String proteinId,
+                                    final String source, final String organism) {
+        Long id = cache.get(proteinId);
         if (id == null) {
-            final Node existingNode = graph.findNode(PROTEIN_LABEL, "id", proteinLabel);
+            final Node existingNode = graph.findNode(PROTEIN_LABEL, "id", proteinId);
             if (existingNode != null) {
                 id = existingNode.getId();
-                cache.put(proteinLabel, id);
+                cache.put(proteinId, id);
             } else {
                 final Map<String, Object> props = new HashMap<>();
-                props.put("id", proteinLabel);
-                if (!genBank.isEmpty())
-                    props.put("genbank_id", genBank);
-                if (!uniprot.isEmpty())
-                    props.put("uniprot_accession", uniprot);
-                if (!pdb.isEmpty())
-                    props.put("pdb_id", pdb);
-                if (!carbLigand.isEmpty())
-                    props.put("carbohydrate_ligand", carbLigand);
-                if (!ecNumber.isEmpty())
-                    props.put("ec_number", ecNumber);
-                if (!knownActivities.isEmpty())
-                    props.put("known_activities", knownActivities);
-                if (!mechanism.isEmpty())
-                    props.put("mechanism", mechanism);
-                if (!clan.isEmpty())
-                    props.put("clan", clan);
-                if (!site.isEmpty())
-                    props.put("site", site);
+                props.put("id", proteinId);
+                props.put("source", source);
                 if (!organism.isEmpty())
                     props.put("organism", organism);
                 graph.addNode(PROTEIN_LABEL, props);
-                final Node newNode = graph.findNode(PROTEIN_LABEL, "id", proteinLabel);
+                final Node newNode = graph.findNode(PROTEIN_LABEL, "id", proteinId);
                 if (newNode != null) {
                     id = newNode.getId();
-                    cache.put(proteinLabel, id);
+                    cache.put(proteinId, id);
                 }
             }
         }
@@ -312,67 +284,54 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
         }
     }
 
+    /**
+     * Export EC numbers scraped from CAZy family pages. The TSV file has columns:
+     * class, family, ec_number, activity_name
+     */
     private void exportEnzymeActivities(final Workspace workspace, final Graph graph) throws ExporterException {
-        final Map<String, Integer> colMap = new HashMap<>();
-        MappingIterator<String[]> iterator;
-        try {
-            iterator = FileUtils.openTsvWithHeader(
-                    workspace, dataSource, CazyUpdater.EC_FILE_NAME, String[].class);
-        } catch (IOException e) {
-            if (LOGGER.isWarnEnabled())
-                LOGGER.warn("Failed to open EC numbers file: " + e.getMessage());
-            return;
-        }
+        try (final BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(
+                java.nio.file.Files.newInputStream(
+                        dataSource.resolveSourceFilePath(workspace, CazyUpdater.EC_FILE_NAME))))) {
+            String headerLine = reader.readLine();
+            if (headerLine == null)
+                return;
 
-        final MappingIterator<String[]> headerIter;
-        try {
-            headerIter = FileUtils.openTsvWithHeader(
-                    workspace, dataSource, CazyUpdater.EC_FILE_NAME, String[].class);
-            final String[] header = headerIter.hasNext() ? headerIter.next() : null;
-            if (header != null) {
-                for (int i = 0; i < header.length; i++) {
-                    colMap.put(header[i].trim().toLowerCase().replace(" ", "_"), i);
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty())
+                    continue;
+
+                final String[] cols = line.split("\t", -1);
+                if (cols.length < 3)
+                    continue;
+
+                final String classID = cols[0].trim();
+                final String famID = cols[1].trim();
+                final String ecNumber = cols[2].trim();
+                final String activityName = cols.length > 3 ? cols[3].trim() : "";
+
+                if (ecNumber.isEmpty())
+                    continue;
+
+                final Node classNode = graph.findNode(CAZY_CLASS_LABEL, "id", classID);
+                final Node famNode = graph.findNode(CAZY_FAMILY_LABEL, "id", famID);
+
+                Node ecNode = graph.findNode(EC_LABEL, "id", ecNumber);
+                if (ecNode == null) {
+                    graph.addNode(EC_LABEL, "id", ecNumber, "activity_name", activityName);
+                    ecNode = graph.findNode(EC_LABEL, "id", ecNumber);
+                }
+
+                if (ecNode != null && classNode != null) {
+                    graph.addEdge(classNode, ecNode, "ASSOCIATED_WITH_EC");
+                }
+                if (ecNode != null && famNode != null) {
+                    graph.addEdge(famNode, ecNode, "HAS_EC_NUMBER");
                 }
             }
         } catch (IOException e) {
             if (LOGGER.isWarnEnabled())
-                LOGGER.warn("Failed to read EC numbers header: " + e.getMessage());
-            return;
-        }
-
-        String[] row;
-        while ((row = iterator.hasNext() ? iterator.next() : null) != null) {
-            if (row == null || row.length < 3)
-                continue;
-
-            final int clsIdx = colMap.getOrDefault("class", -1);
-            final int famIdx = colMap.getOrDefault("family", -1);
-            final int ecIdx = colMap.getOrDefault("ec_number", -1);
-            final int actIdx = colMap.getOrDefault("activity_name", -1);
-
-            if (clsIdx < 0 || famIdx < 0 || ecIdx < 0)
-                continue;
-
-            final String classID = row[clsIdx].trim();
-            final String famID = row[famIdx].trim();
-            final String ecNumber = row[ecIdx].trim();
-            final String activityName = row.length > actIdx ? row[actIdx].trim() : "";
-
-            final Node classNode = graph.findNode(CAZY_CLASS_LABEL, "id", classID);
-            final Node famNode = graph.findNode(CAZY_FAMILY_LABEL, "id", famID);
-
-            Node ecNode = graph.findNode(EC_LABEL, "id", ecNumber);
-            if (ecNode == null && !ecNumber.isEmpty()) {
-                graph.addNode(EC_LABEL, "id", ecNumber, "names", ecNumber, "activity_name", activityName);
-                ecNode = graph.findNode(EC_LABEL, "id", ecNumber);
-            }
-
-            if (ecNode != null && classNode != null) {
-                graph.addEdge(classNode, ecNode, "ASSOCIATED_WITH_EC");
-            }
-            if (ecNode != null && famNode != null) {
-                graph.addEdge(famNode, ecNode, "HAS_EC_NUMBER");
-            }
+                LOGGER.warn("Failed to read EC numbers file: " + e.getMessage());
         }
     }
 }

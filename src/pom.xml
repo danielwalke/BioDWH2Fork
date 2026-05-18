@@ -97,6 +97,7 @@
         <module>biodwh2-npass</module>
         <module>biodwh2-cazy</module>
         <module>biodwh2-eggnog</module>
+        <module>biodwh2-gtdb</module>
     </modules>
 
     <packaging>pom</packaging>
