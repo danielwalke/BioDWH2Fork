@@ -88,6 +88,18 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
     }
 
     private void exportCAZyData(final Workspace workspace, final Graph graph) throws ExporterException {
+        if (LOGGER.isInfoEnabled())
+            LOGGER.info("Scanning CAZy bulk data for NCBI protein IDs...");
+        final java.util.Set<String> genBankIds = collectNCBIProteinIds(workspace);
+        if (LOGGER.isInfoEnabled())
+            LOGGER.info("Found " + genBankIds.size() + " unique NCBI GenBank protein IDs");
+
+        final Map<String, Integer> genbankToTaxonId = new HashMap<>();
+        final Map<String, String> genbankToUniprotId = new HashMap<>();
+
+        loadNCBITaxonMappings(workspace, genBankIds, genbankToTaxonId);
+        loadUniProtMappings(workspace, genBankIds, genbankToUniprotId);
+
         try (final ZipInputStream zipStream = FileUtils.openZip(workspace, dataSource, CazyUpdater.DATA_FILE_NAME)) {
             ZipEntry entry;
             while ((entry = zipStream.getNextEntry()) != null) {
@@ -95,7 +107,7 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
                     continue;
 
                 try {
-                    processCaZyZipEntry(zipStream, graph);
+                    processCaZyZipEntry(zipStream, graph, genbankToTaxonId, genbankToUniprotId);
                 } catch (IOException e) {
                     throw new ExporterFormatException("Failed to process CAZy data: " + e.getMessage(), e);
                 }
@@ -103,6 +115,106 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
             }
         } catch (IOException e) {
             throw new ExporterFormatException("Failed to read CAZy data zip: " + e.getMessage(), e);
+        }
+    }
+
+    private java.util.Set<String> collectNCBIProteinIds(final Workspace workspace) throws ExporterException {
+        final java.util.Set<String> genBankIds = new java.util.HashSet<>();
+        try (final ZipInputStream zipStream = FileUtils.openZip(workspace, dataSource, CazyUpdater.DATA_FILE_NAME)) {
+            ZipEntry entry;
+            while ((entry = zipStream.getNextEntry()) != null) {
+                if (!entry.getName().endsWith(".txt"))
+                    continue;
+                try (final BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(new NonClosingInputStream(zipStream)))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.trim().isEmpty())
+                            continue;
+                        final String[] cols = line.split("\t", -1);
+                        if (cols.length >= 5) {
+                            final String source = cols[4].trim();
+                            if ("jgi".equalsIgnoreCase(source)) {
+                                // TODO: handle jgi rows
+                            } else if ("ncbi".equalsIgnoreCase(source)) {
+                                final String proteinId = cols[3].trim();
+                                if (!proteinId.isEmpty()) {
+                                    genBankIds.add(proteinId);
+                                }
+                            }
+                        }
+                    }
+                }
+                zipStream.closeEntry();
+            }
+        } catch (IOException e) {
+            throw new ExporterFormatException("Failed to scan CAZy data zip: " + e.getMessage(), e);
+        }
+        return genBankIds;
+    }
+
+    private void loadNCBITaxonMappings(final Workspace workspace, final java.util.Set<String> genBankIds,
+                                       final Map<String, Integer> genbankToTaxonId) {
+        final java.nio.file.Path path = dataSource.resolveSourceFilePath(workspace, "prot.accession2taxid.gz");
+        if (!path.toFile().exists()) {
+            LOGGER.warn("prot.accession2taxid.gz not found; skipping NCBI taxon ID mappings.");
+            return;
+        }
+        if (LOGGER.isInfoEnabled())
+            LOGGER.info("Loading NCBI taxon mappings from " + path.getFileName() + "...");
+        try (final BufferedReader reader = FileUtils.createBufferedReaderFromStream(
+                FileUtils.openGzip(workspace, dataSource, "prot.accession2taxid.gz"))) {
+            String line = reader.readLine(); // Header
+            int count = 0;
+            while ((line = reader.readLine()) != null) {
+                final String[] cols = line.split("\t", -1);
+                if (cols.length >= 3) {
+                    final String genbankId = cols[1];
+                    if (genBankIds.contains(genbankId)) {
+                        final String taxIdStr = cols[2];
+                        try {
+                            genbankToTaxonId.put(genbankId, Integer.parseInt(taxIdStr));
+                            count++;
+                        } catch (NumberFormatException ignored) {}
+                    }
+                }
+            }
+            if (LOGGER.isInfoEnabled())
+                LOGGER.info("Loaded " + count + " NCBI taxon mappings.");
+        } catch (IOException e) {
+            LOGGER.error("Failed to load NCBI taxon mappings: " + e.getMessage(), e);
+        }
+    }
+
+    private void loadUniProtMappings(final Workspace workspace, final java.util.Set<String> genBankIds,
+                                     final Map<String, String> genbankToUniprotId) {
+        final java.nio.file.Path path = dataSource.resolveSourceFilePath(workspace, "idmapping.dat.gz");
+        if (!path.toFile().exists()) {
+            LOGGER.warn("idmapping.dat.gz not found; skipping UniProt ID mappings.");
+            return;
+        }
+        if (LOGGER.isInfoEnabled())
+            LOGGER.info("Loading UniProt mappings from " + path.getFileName() + "...");
+        try (final BufferedReader reader = FileUtils.createBufferedReaderFromStream(
+                FileUtils.openGzip(workspace, dataSource, "idmapping.dat.gz"))) {
+            String line;
+            int count = 0;
+            while ((line = reader.readLine()) != null) {
+                final String[] cols = line.split("\t", -1);
+                if (cols.length >= 3) {
+                    if ("EMBL-GenBank-DDBJ_CDS".equals(cols[1])) {
+                        final String genbankId = cols[2];
+                        if (genBankIds.contains(genbankId)) {
+                            final String uniprotId = cols[0];
+                            genbankToUniprotId.put(genbankId, uniprotId);
+                            count++;
+                        }
+                    }
+                }
+            }
+            if (LOGGER.isInfoEnabled())
+                LOGGER.info("Loaded " + count + " UniProt mappings.");
+        } catch (IOException e) {
+            LOGGER.error("Failed to load UniProt mappings: " + e.getMessage(), e);
         }
     }
 
@@ -116,11 +228,19 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
      *   <li>source database (ncbi or jgi)</li>
      * </ol>
      */
-    private void processCaZyZipEntry(final java.io.InputStream zipStream, final Graph graph) throws IOException {
-        final BoundedCache familyCache = new BoundedCache(CACHE_MAX_SIZE);
-        final BoundedCache proteinCache = new BoundedCache(CACHE_MAX_SIZE);
+    private void processCaZyZipEntry(final java.io.InputStream zipStream, final Graph graph,
+                                     final Map<String, Integer> genbankToTaxonId,
+                                     final Map<String, String> genbankToUniprotId) throws IOException {
+        final BoundedCache<String, Long> familyCache = new BoundedCache<>(CACHE_MAX_SIZE);
+        final BoundedCache<String, Long> proteinCache = new BoundedCache<>(CACHE_MAX_SIZE);
+        final BoundedCache<String, Long> organismCache = new BoundedCache<>(CACHE_MAX_SIZE);
+        final Map<String, Long> classCache = new HashMap<>();
+        final Map<String, Long> domainCache = new HashMap<>();
+        final Map<Long, java.util.Set<Long>> addedEdges = new HashMap<>();
+        final Map<String, Integer> organismToTaxonIdMap = new HashMap<>();
+
         int count = 0;
-        try (final BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(zipStream))) {
+        try (final BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(new NonClosingInputStream(zipStream)))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty())
@@ -140,6 +260,14 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
                     !family.startsWith("CE") && !family.startsWith("AA") && !family.startsWith("CBM"))
                     continue;
 
+                if ("jgi".equalsIgnoreCase(source)) {
+                    // TODO: handle jgi rows
+                    continue;
+                }
+
+                if (!"ncbi".equalsIgnoreCase(source))
+                    continue;
+
                 String classID = family;
                 if (classID.startsWith("CBM")) {
                     classID = "CBM";
@@ -149,32 +277,43 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
                     continue;
                 }
 
-                final String label = "CBM".equals(classID) ? CBM_CLASS_LABEL : CAZY_CLASS_LABEL;
-                final Node classNode = graph.findNode(label, "id", classID);
-                if (classNode == null)
-                    continue;
-
-                final Long famId = ensureFamilyNode(graph, familyCache, family, classID);
-                if (famId != null) {
-                    graph.addEdge(classNode.getId(), famId, "HAS_FAMILY");
+                Long classNodeId = classCache.get(classID);
+                if (classNodeId == null) {
+                    final String label = "CBM".equals(classID) ? CBM_CLASS_LABEL : CAZY_CLASS_LABEL;
+                    final Node classNode = graph.findNode(label, "id", classID);
+                    if (classNode == null)
+                        continue;
+                    classNodeId = classNode.getId();
+                    classCache.put(classID, classNodeId);
                 }
 
-                final Long domainId = ensureDomainNode(graph, domain);
-                if (domainId != null && famId != null) {
+                final Long famId = ensureFamilyNode(graph, familyCache, family, classID);
+                if (famId != null && addEdgeIfNotExists(addedEdges, classNodeId, famId)) {
+                    graph.addEdge(classNodeId, famId, "HAS_FAMILY");
+                }
+
+                final Long domainId = ensureDomainNode(graph, domainCache, domain);
+                if (domainId != null && famId != null && addEdgeIfNotExists(addedEdges, famId, domainId)) {
                     graph.addEdge(famId, domainId, "PRESENT_IN");
                 }
 
                 if (!organism.isEmpty()) {
-                    final Long orgId = ensureOrganismNode(graph, organism);
-                    if (orgId != null && famId != null) {
+                    final Long orgId = ensureOrganismNode(graph, organismCache, organism);
+                    if (orgId != null && famId != null && addEdgeIfNotExists(addedEdges, orgId, famId)) {
                         graph.addEdge(orgId, famId, "HAS_FAMILY");
                     }
                 }
 
                 if (!proteinId.isEmpty()) {
-                    final Long protoId = ensureProteinNode(graph, proteinCache, proteinId, source, organism);
+                    final Long protoId = ensureProteinNode(graph, proteinCache, proteinId, source, organism, genbankToTaxonId, genbankToUniprotId);
                     if (protoId != null && famId != null) {
                         graph.addEdge(famId, protoId, "HAS_PROTEIN");
+                    }
+                    if ("ncbi".equalsIgnoreCase(source) && !organism.isEmpty()) {
+                        final Integer taxonId = genbankToTaxonId.get(proteinId);
+                        if (taxonId != null) {
+                            organismToTaxonIdMap.put(organism, taxonId);
+                        }
                     }
                 }
 
@@ -183,45 +322,66 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
                     LOGGER.debug("Processed " + count + " CAZy entries");
             }
         }
+
+        // Update Organism nodes with their NCBI taxon ID properties
+        for (final Map.Entry<String, Integer> entry : organismToTaxonIdMap.entrySet()) {
+            Long orgId = organismCache.get(entry.getKey());
+            Node orgNode = null;
+            if (orgId != null) {
+                orgNode = graph.getNode(orgId);
+            }
+            if (orgNode == null) {
+                orgNode = graph.findNode(ORGANISM_LABEL, "name", entry.getKey());
+            }
+            if (orgNode != null) {
+                orgNode.setProperty("ncbi_taxid", entry.getValue());
+                graph.update(orgNode);
+            }
+        }
     }
 
-    private Long ensureFamilyNode(final Graph graph, final BoundedCache cache,
+    private boolean addEdgeIfNotExists(final Map<Long, java.util.Set<Long>> edgeCache, final Long sourceId, final Long targetId) {
+        return edgeCache.computeIfAbsent(sourceId, k -> new java.util.HashSet<>()).add(targetId);
+    }
+
+    private Long ensureFamilyNode(final Graph graph, final BoundedCache<String, Long> cache,
                                    final String family, final String classID) {
         Long id = cache.get(family);
         if (id == null) {
-            final Node node = graph.findNode(CAZY_FAMILY_LABEL, "id", family);
-            if (node != null) {
-                cache.put(family, node.getId());
-                return node.getId();
+            Node node = graph.findNode(CAZY_FAMILY_LABEL, "id", family);
+            if (node == null) {
+                node = graph.addNode(CAZY_FAMILY_LABEL, "id", family, "class_id", classID);
             }
-            graph.addNode(CAZY_FAMILY_LABEL, "id", family, "class_id", classID);
-            final Node newNode = graph.findNode(CAZY_FAMILY_LABEL, "id", family);
-            if (newNode != null) {
-                id = newNode.getId();
-                cache.put(family, id);
-            }
+            id = node.getId();
+            cache.put(family, id);
         }
         return id;
     }
 
-    private Long ensureDomainNode(final Graph graph, final String domainId) {
-        final Node node = graph.findNode(DOMAIN_LABEL, "id", domainId);
-        if (node != null) {
-            return node.getId();
+    private Long ensureDomainNode(final Graph graph, final Map<String, Long> cache, final String domainId) {
+        Long id = cache.get(domainId);
+        if (id == null) {
+            Node node = graph.findNode(DOMAIN_LABEL, "id", domainId);
+            if (node == null) {
+                node = graph.addNode(DOMAIN_LABEL, "id", domainId, "name", domainId);
+            }
+            id = node.getId();
+            cache.put(domainId, id);
         }
-        graph.addNode(DOMAIN_LABEL, "id", domainId, "name", domainId);
-        final Node newNode = graph.findNode(DOMAIN_LABEL, "id", domainId);
-        return newNode != null ? newNode.getId() : null;
+        return id;
     }
 
-    private Long ensureOrganismNode(final Graph graph, final String name) {
-        final Node node = graph.findNode(ORGANISM_LABEL, "name", name);
-        if (node != null) {
-            return node.getId();
+    private Long ensureOrganismNode(final Graph graph, final BoundedCache<String, Long> cache, final String name) {
+        Long id = cache.get(name);
+        if (id == null) {
+            Node node = graph.findNode(ORGANISM_LABEL, "name", name);
+            if (node == null) {
+                node = graph.addNode(ORGANISM_LABEL, "name", name);
+            }
+            id = node.getId();
+            cache.put(name, id);
         }
-        graph.addNode(ORGANISM_LABEL, "name", name);
-        final Node newNode = graph.findNode(ORGANISM_LABEL, "name", name);
-        return newNode != null ? newNode.getId() : null;
+        return id;
     }
 
     /**
@@ -231,56 +391,48 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
      * @param source    the source database ("ncbi" or "jgi")
      * @param organism  the organism name for annotation
      */
-    private Long ensureProteinNode(final Graph graph, final BoundedCache cache, final String proteinId,
-                                    final String source, final String organism) {
+    private Long ensureProteinNode(final Graph graph, final BoundedCache<String, Long> cache, final String proteinId,
+                                    final String source, final String organism,
+                                    final Map<String, Integer> genbankToTaxonId,
+                                    final Map<String, String> genbankToUniprotId) {
         Long id = cache.get(proteinId);
         if (id == null) {
-            final Node existingNode = graph.findNode(PROTEIN_LABEL, "id", proteinId);
-            if (existingNode != null) {
-                id = existingNode.getId();
-                cache.put(proteinId, id);
-            } else {
+            Node node = graph.findNode(PROTEIN_LABEL, "id", proteinId);
+            if (node == null) {
                 final Map<String, Object> props = new HashMap<>();
                 props.put("id", proteinId);
                 props.put("source", source);
                 if (!organism.isEmpty())
                     props.put("organism", organism);
-                graph.addNode(PROTEIN_LABEL, props);
-                final Node newNode = graph.findNode(PROTEIN_LABEL, "id", proteinId);
-                if (newNode != null) {
-                    id = newNode.getId();
-                    cache.put(proteinId, id);
+
+                if ("ncbi".equalsIgnoreCase(source)) {
+                    final Integer taxonId = genbankToTaxonId.get(proteinId);
+                    if (taxonId != null)
+                        props.put("ncbi_taxid", taxonId);
+                    final String uniprotId = genbankToUniprotId.get(proteinId);
+                    if (uniprotId != null)
+                        props.put("uniprot_id", uniprotId);
                 }
+
+                node = graph.addNode(PROTEIN_LABEL, props);
             }
+            id = node.getId();
+            cache.put(proteinId, id);
         }
         return id;
     }
 
-    private static class BoundedCache {
+    private static class BoundedCache<K, V> extends java.util.LinkedHashMap<K, V> {
         private final int maxSize;
-        private final Map<String, Long> cache;
-        private final List<String> insertionOrder;
 
         BoundedCache(final int maxSize) {
+            super(maxSize, 0.75f, true);
             this.maxSize = maxSize;
-            this.cache = new HashMap<>();
-            this.insertionOrder = new LinkedList<>();
         }
 
-        public Long get(final String key) {
-            return cache.get(key);
-        }
-
-        public void put(final String key, final Long value) {
-            if (cache.containsKey(key)) {
-                return;
-            }
-            if (cache.size() >= maxSize) {
-                String oldest = insertionOrder.remove(0);
-                cache.remove(oldest);
-            }
-            cache.put(key, value);
-            insertionOrder.add(key);
+        @Override
+        protected boolean removeEldestEntry(final Map.Entry<K, V> eldest) {
+            return size() > maxSize;
         }
     }
 
@@ -332,6 +484,17 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
         } catch (IOException e) {
             if (LOGGER.isWarnEnabled())
                 LOGGER.warn("Failed to read EC numbers file: " + e.getMessage());
+        }
+    }
+
+    private static class NonClosingInputStream extends java.io.FilterInputStream {
+        protected NonClosingInputStream(final java.io.InputStream in) {
+            super(in);
+        }
+
+        @Override
+        public void close() throws IOException {
+            // Do not close the underlying stream
         }
     }
 }

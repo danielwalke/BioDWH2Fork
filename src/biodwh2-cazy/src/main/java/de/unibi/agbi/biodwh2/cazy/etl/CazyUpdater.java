@@ -79,6 +79,8 @@ public class CazyUpdater extends Updater<CazyDataSource> {
     protected boolean tryUpdateFiles(final Workspace workspace) throws UpdaterException {
         downloadCAZyData(workspace);
         scrapeECNumbers(workspace);
+        downloadNCBITaxonMapping(workspace);
+        downloadUniProtMapping(workspace);
         return true;
     }
 
@@ -87,6 +89,22 @@ public class CazyUpdater extends Updater<CazyDataSource> {
             downloadFileAsBrowser(workspace, DATA_URL, DATA_FILE_NAME);
         } catch (UpdaterException e) {
             throw new UpdaterException("Failed to download CAZy data", e);
+        }
+    }
+
+    private void downloadNCBITaxonMapping(final Workspace workspace) throws UpdaterException {
+        try {
+            downloadFileAsBrowser(workspace, "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/accession2taxid/prot.accession2taxid.gz", "prot.accession2taxid.gz");
+        } catch (UpdaterException e) {
+            throw new UpdaterException("Failed to download NCBI taxon mapping", e);
+        }
+    }
+
+    private void downloadUniProtMapping(final Workspace workspace) throws UpdaterException {
+        try {
+            downloadFileAsBrowser(workspace, "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping.dat.gz", "idmapping.dat.gz");
+        } catch (UpdaterException e) {
+            throw new UpdaterException("Failed to download UniProt mapping", e);
         }
     }
 
@@ -227,6 +245,6 @@ public class CazyUpdater extends Updater<CazyDataSource> {
 
     @Override
     protected String[] expectedFileNames() {
-        return new String[]{DATA_FILE_NAME, EC_FILE_NAME};
+        return new String[]{DATA_FILE_NAME, EC_FILE_NAME, "prot.accession2taxid.gz", "idmapping.dat.gz"};
     }
 }

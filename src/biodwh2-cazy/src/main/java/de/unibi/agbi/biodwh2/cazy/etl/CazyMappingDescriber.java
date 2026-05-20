@@ -33,6 +33,11 @@ public class CazyMappingDescriber extends MappingDescriber {
         // Only map as GenBank if the source is NCBI (JGI IDs are not GenBank accessions)
         if (proteinId != null && !proteinId.isEmpty() && "ncbi".equalsIgnoreCase(source)) {
             proteinDescription.addIdentifier(IdentifierType.GENBANK, proteinId);
+
+            final String uniprotId = node.getProperty("uniprot_id");
+            if (uniprotId != null && !uniprotId.isEmpty()) {
+                proteinDescription.addIdentifier(IdentifierType.UNIPROT_KB, uniprotId);
+            }
         }
 
         final String organism = node.<String>getProperty("organism");
@@ -46,6 +51,10 @@ public class CazyMappingDescriber extends MappingDescriber {
     private NodeMappingDescription[] describeOrganism(final Node node) {
         final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.TAXON);
         description.addName(node.getProperty("name"));
+        final Integer ncbiTaxid = node.getProperty("ncbi_taxid");
+        if (ncbiTaxid != null) {
+            description.addIdentifier(IdentifierType.NCBI_TAXON, ncbiTaxid);
+        }
         return new NodeMappingDescription[]{description};
     }
 
