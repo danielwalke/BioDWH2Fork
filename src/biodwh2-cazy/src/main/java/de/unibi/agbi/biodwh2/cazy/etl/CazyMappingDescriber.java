@@ -12,14 +12,11 @@ public class CazyMappingDescriber extends MappingDescriber {
 
     @Override
     public NodeMappingDescription[] describe(final Graph graph, final Node node, final String localMappingLabel) {
-        if (CazyGraphExporter.PROTEIN_LABEL.equalsIgnoreCase(localMappingLabel)) {
+        if ("CazyProtein".equalsIgnoreCase(localMappingLabel)) {
             return describeProtein(node);
         }
-        if (CazyGraphExporter.ORGANISM_LABEL.equalsIgnoreCase(localMappingLabel)) {
+        if ("CazyOrganism".equalsIgnoreCase(localMappingLabel)) {
             return describeOrganism(node);
-        }
-        if (CazyGraphExporter.EC_LABEL.equalsIgnoreCase(localMappingLabel)) {
-            return describeECNumber(node);
         }
         return null;
     }
@@ -28,23 +25,25 @@ public class CazyMappingDescriber extends MappingDescriber {
         final NodeMappingDescription proteinDescription = new NodeMappingDescription(
                 NodeMappingDescription.NodeType.PROTEIN);
         final String proteinId = node.<String>getProperty("id");
-        final String source = node.<String>getProperty("source");
 
-        // Only map as GenBank if the source is NCBI (JGI IDs are not GenBank accessions)
-        if (proteinId != null && !proteinId.isEmpty() && "ncbi".equalsIgnoreCase(source)) {
+        if (proteinId != null && !proteinId.isEmpty()) {
             proteinDescription.addIdentifier(IdentifierType.GENBANK, proteinId);
 
             final String uniprotId = node.getProperty("uniprot_id");
             if (uniprotId != null && !uniprotId.isEmpty()) {
-                proteinDescription.addIdentifier(IdentifierType.UNIPROT_KB, uniprotId);
+                for (final String part : uniprotId.split(";")) {
+                    final String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        proteinDescription.addIdentifier(IdentifierType.UNIPROT_KB, trimmed);
+                    }
+                }
             }
         }
 
-        final String organism = node.<String>getProperty("organism");
-        if (organism != null && !organism.isEmpty()) {
-            proteinDescription.addName(organism);
+        final String name = node.getProperty("name");
+        if (name != null && !name.isEmpty()) {
+            proteinDescription.addName(name);
         }
-        proteinDescription.addName("CAZy protein: " + proteinId);
         return new NodeMappingDescription[]{proteinDescription};
     }
 
@@ -58,26 +57,11 @@ public class CazyMappingDescriber extends MappingDescriber {
         return new NodeMappingDescription[]{description};
     }
 
-    private NodeMappingDescription[] describeECNumber(final Node node) {
-        final NodeMappingDescription description = new NodeMappingDescription(
-                NodeMappingDescription.NodeType.PROTEIN);
-        final String ecNumber = node.<String>getProperty("id");
-        if (ecNumber != null && !ecNumber.isEmpty()) {
-            description.addIdentifier(IdentifierType.EC_NUMBER, ecNumber);
-        }
-        final String activityName = node.<String>getProperty("activity_name");
-        if (activityName != null && !activityName.isEmpty()) {
-            description.addName(activityName);
-        }
-        return new NodeMappingDescription[]{description};
-    }
-
     @Override
     protected String[] getNodeMappingLabels() {
         return new String[]{
-                CazyGraphExporter.PROTEIN_LABEL,
-                CazyGraphExporter.ORGANISM_LABEL,
-                CazyGraphExporter.EC_LABEL
+                "CazyProtein",
+                "CazyOrganism"
         };
     }
 

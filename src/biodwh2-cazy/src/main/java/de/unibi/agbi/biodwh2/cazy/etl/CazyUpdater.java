@@ -14,6 +14,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -34,7 +35,7 @@ public class CazyUpdater extends Updater<CazyDataSource> {
 
     private static final String DATA_URL = "https://www.cazy.org/IMG/cazy_data/cazy_data.zip";
     static final String DATA_FILE_NAME = "cazy_data.zip";
-    static final String EC_FILE_NAME = "cazy_ec_numbers.tsv";
+    static final String STRUCTURES_FILE_NAME = "cazy_structures.tsv";
 
     private static final String CAZY_BASE_URL = "https://www.cazy.org/";
     private static final Pattern EC_PATTERN = Pattern.compile("\\d+\\.\\d+\\.\\d+\\.\\d+");
@@ -56,7 +57,7 @@ public class CazyUpdater extends Updater<CazyDataSource> {
             final int responseCode = conn.getResponseCode();
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 final String source = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                final Pattern pattern = Pattern.compile("Last update: (\\d{4}-\\d{2}-\\d{2})");
+                final Pattern pattern = Pattern.compile("Last update:.*?(\\d{4}-\\d{2}-\\d{2})");
                 final Matcher matcher = pattern.matcher(source);
                 if (matcher.find()) {
                     versionStr = matcher.group(1);
@@ -78,9 +79,7 @@ public class CazyUpdater extends Updater<CazyDataSource> {
     @Override
     protected boolean tryUpdateFiles(final Workspace workspace) throws UpdaterException {
         downloadCAZyData(workspace);
-        scrapeECNumbers(workspace);
-        downloadNCBITaxonMapping(workspace);
-        downloadUniProtMapping(workspace);
+        scrapeCazyStructures(workspace);
         return true;
     }
 
@@ -92,79 +91,54 @@ public class CazyUpdater extends Updater<CazyDataSource> {
         }
     }
 
-    private void downloadNCBITaxonMapping(final Workspace workspace) throws UpdaterException {
-        try {
-            downloadFileAsBrowser(workspace, "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/accession2taxid/prot.accession2taxid.gz", "prot.accession2taxid.gz");
-        } catch (UpdaterException e) {
-            throw new UpdaterException("Failed to download NCBI taxon mapping", e);
-        }
-    }
-
-    private void downloadUniProtMapping(final Workspace workspace) throws UpdaterException {
-        try {
-            downloadFileAsBrowser(workspace, "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping.dat.gz", "idmapping.dat.gz");
-        } catch (UpdaterException e) {
-            throw new UpdaterException("Failed to download UniProt mapping", e);
-        }
-    }
-
-    /**
-     * Scrape EC numbers from each family page on the CAZy website. Each family page (e.g. GH1.html)
-     * contains an activities table with EC numbers in {@code <td id="separateur2">} cells.
-     * Family IDs are extracted from the downloaded bulk data ZIP to know which pages to fetch.
-     */
-    private void scrapeECNumbers(final Workspace workspace) throws UpdaterException {
-        final Path filePath = dataSource.resolveSourceFilePath(workspace, EC_FILE_NAME);
+    private void scrapeCazyStructures(final Workspace workspace) throws UpdaterException {
+        final Path structuresPath = dataSource.resolveSourceFilePath(workspace, STRUCTURES_FILE_NAME);
         try {
             final Set<String> familyIds = extractFamilyIdsFromData(workspace);
             if (LOGGER.isInfoEnabled())
-                LOGGER.info("Found " + familyIds.size() + " enzymatic families to scrape for EC numbers");
+                LOGGER.info("Found " + familyIds.size() + " CAZy families to scrape for structure information");
 
-            final StringBuilder tsv = new StringBuilder();
-            tsv.append("class\tfamily\tec_number\tactivity_name\n");
+            try (final BufferedWriter writer = Files.newBufferedWriter(structuresPath, StandardCharsets.UTF_8)) {
+                writer.write("family\tprotein_name\tec\torganism\tgenbank\tuniprot\tpdb\tligands\n");
 
-            int scraped = 0;
-            int totalEC = 0;
-            for (final String familyId : familyIds) {
-                final String classId = extractClassId(familyId);
-                if (classId == null)
-                    continue;
-
-                try {
-                    final List<String[]> ecEntries = scrapeFamilyECNumbers(familyId);
-                    for (final String[] entry : ecEntries) {
-                        tsv.append(classId).append('\t');
-                        tsv.append(familyId).append('\t');
-                        tsv.append(entry[0]).append('\t');
-                        tsv.append(entry[1]).append('\n');
-                        totalEC++;
+                int scraped = 0;
+                int totalEntries = 0;
+                for (final String familyId : familyIds) {
+                    try {
+                        final List<String[]> entries = scrapeFamilyStructures(familyId);
+                        for (final String[] entry : entries) {
+                            writer.write(familyId + "\t" +
+                                         entry[0] + "\t" +
+                                         entry[1] + "\t" +
+                                         entry[2] + "\t" +
+                                         entry[3] + "\t" +
+                                         entry[4] + "\t" +
+                                         entry[5] + "\t" +
+                                         entry[6] + "\n");
+                            totalEntries++;
+                        }
+                        scraped++;
+                        if (scraped % 50 == 0 && LOGGER.isInfoEnabled()) {
+                            LOGGER.info("Scraped structures from " + scraped + "/" + familyIds.size() +
+                                        " families (" + totalEntries + " entries so far)");
+                        }
+                        Thread.sleep(REQUEST_DELAY_MS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    } catch (Exception e) {
+                        if (LOGGER.isWarnEnabled())
+                            LOGGER.warn("Failed to scrape structures for " + familyId + ": " + e.getMessage());
                     }
-                    scraped++;
-                    if (scraped % 50 == 0 && LOGGER.isInfoEnabled())
-                        LOGGER.info("Scraped EC numbers from " + scraped + "/" + familyIds.size() +
-                                    " families (" + totalEC + " EC entries so far)");
-                    Thread.sleep(REQUEST_DELAY_MS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                } catch (Exception e) {
-                    if (LOGGER.isWarnEnabled())
-                        LOGGER.warn("Failed to scrape EC numbers for " + familyId + ": " + e.getMessage());
                 }
+                if (LOGGER.isInfoEnabled())
+                    LOGGER.info("Structure scraping complete: " + totalEntries + " entries from " + scraped + " families");
             }
-
-            if (LOGGER.isInfoEnabled())
-                LOGGER.info("EC number scraping complete: " + totalEC + " entries from " + scraped + " families");
-            Files.writeString(filePath, tsv.toString(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new UpdaterException("Failed to write EC numbers file", e);
+            throw new UpdaterException("Failed to write structures TSV file", e);
         }
     }
 
-    /**
-     * Extract unique enzymatic family IDs (GH*, GT*, PL*, CE*, AA*) from the downloaded bulk data.
-     * CBM families are excluded as they are binding modules without enzymatic activity.
-     */
     private Set<String> extractFamilyIdsFromData(final Workspace workspace) throws IOException {
         final Set<String> familyIds = new TreeSet<>();
         final Path zipPath = dataSource.resolveSourceFilePath(workspace, DATA_FILE_NAME);
@@ -173,8 +147,7 @@ public class CazyUpdater extends Updater<CazyDataSource> {
             while ((entry = zipStream.getNextEntry()) != null) {
                 if (!entry.getName().endsWith(".txt"))
                     continue;
-                // Do NOT wrap in try-with-resources: closing the reader would close the ZipInputStream
-                final BufferedReader reader = new BufferedReader(new InputStreamReader(zipStream));
+                final BufferedReader reader = new BufferedReader(new InputStreamReader(zipStream, StandardCharsets.UTF_8));
                 String line;
                 while ((line = reader.readLine()) != null) {
                     if (line.trim().isEmpty())
@@ -182,7 +155,7 @@ public class CazyUpdater extends Updater<CazyDataSource> {
                     final String[] cols = line.split("\t", 2);
                     final String family = cols[0].trim();
                     if (family.startsWith("GH") || family.startsWith("GT") || family.startsWith("PL") ||
-                        family.startsWith("CE") || family.startsWith("AA")) {
+                        family.startsWith("CE") || family.startsWith("AA") || family.startsWith("CBM")) {
                         familyIds.add(family);
                     }
                 }
@@ -192,16 +165,9 @@ public class CazyUpdater extends Updater<CazyDataSource> {
         return familyIds;
     }
 
-    /**
-     * Scrape EC numbers from a single family page. The activities table on each family page
-     * has rows with {@code <td id="separateur2">} cells where the second cell is the EC number
-     * and the third cell is the activity name.
-     *
-     * @return list of [ec_number, activity_name] pairs
-     */
-    private List<String[]> scrapeFamilyECNumbers(final String familyId) throws IOException {
+    private List<String[]> scrapeFamilyStructures(final String familyId) throws IOException {
         final List<String[]> results = new ArrayList<>();
-        final String url = CAZY_BASE_URL + familyId + ".html";
+        final String url = CAZY_BASE_URL + familyId + "_structure.html";
         String html;
         try {
             html = getWebsiteSource(url);
@@ -214,37 +180,86 @@ public class CazyUpdater extends Updater<CazyDataSource> {
         final Document doc = Jsoup.parse(html);
         final Elements rows = doc.select("tr");
         for (final Element row : rows) {
-            final Elements cells = row.select("td[id=separateur2]");
-            if (cells.size() < 3)
-                continue;
+            final Elements cells = row.children();
+            if (cells.size() >= 6 && "separateur2".equals(cells.get(0).id())) {
+                final String proteinName = cleanText(cells.get(0).text());
+                final String ecNumbers = extractECNumbers(cells.get(1));
+                final String organism = cleanText(cells.get(2).text());
+                final String genbankIds = extractAccessions(cells.get(3));
+                final String uniprotIds = extractAccessions(cells.get(4));
+                final List<String[]> pdbLigands = extractPDBAndLigands(cells.get(5));
 
-            final String ecText = cells.get(1).text().trim();
-            final String activityText = cells.get(2).text().trim();
+                final List<String> pdbs = new ArrayList<>();
+                final List<String> ligands = new ArrayList<>();
+                for (final String[] pair : pdbLigands) {
+                    if (!pair[0].isEmpty()) pdbs.add(pair[0]);
+                    if (!pair[1].isEmpty()) ligands.add(pair[1]);
+                }
+                final String pdbJoined = String.join("; ", pdbs);
+                final String ligandsJoined = String.join("; ", ligands);
 
-            final Matcher ecMatcher = EC_PATTERN.matcher(ecText);
-            if (ecMatcher.matches()) {
-                results.add(new String[]{ecText, activityText});
+                results.add(new String[]{
+                    proteinName, ecNumbers, organism, genbankIds, uniprotIds, pdbJoined, ligandsJoined
+                });
             }
         }
         return results;
     }
 
-    private static String extractClassId(final String familyId) {
-        if (familyId.startsWith("GH"))
-            return "GH";
-        if (familyId.startsWith("GT"))
-            return "GT";
-        if (familyId.startsWith("PL"))
-            return "PL";
-        if (familyId.startsWith("CE"))
-            return "CE";
-        if (familyId.startsWith("AA"))
-            return "AA";
-        return null;
+    private String cleanText(final String text) {
+        if (text == null)
+            return "";
+        // Replace non-breaking spaces and trim
+        return text.replace("\u00a0", " ").replace("&nbsp;", " ").trim();
+    }
+
+    private String extractECNumbers(final Element cell) {
+        final List<String> ecs = new ArrayList<>();
+        final Matcher matcher = EC_PATTERN.matcher(cell.text());
+        while (matcher.find()) {
+            ecs.add(matcher.group());
+        }
+        return String.join("; ", ecs);
+    }
+
+    private String extractAccessions(final Element cell) {
+        final List<String> ids = new ArrayList<>();
+        final String html = cell.html();
+        final String[] parts = html.split("(?i)<br\\s*/?>");
+        for (final String part : parts) {
+            final String text = Jsoup.parse(part).text().replace("\u00a0", " ").replace("&nbsp;", " ").trim();
+            if (!text.isEmpty()) {
+                ids.add(text);
+            }
+        }
+        return String.join("; ", ids);
+    }
+
+    private List<String[]> extractPDBAndLigands(final Element cell) {
+        final List<String[]> list = new ArrayList<>();
+        final Elements subRows = cell.select("tr");
+        for (final Element subRow : subRows) {
+            final Elements subCells = subRow.children();
+            if (subCells.size() >= 2) {
+                final String pdb = cleanText(subCells.get(0).text());
+                final String ligand = cleanText(subCells.get(1).text());
+                if (!pdb.isEmpty() || !ligand.isEmpty()) {
+                    list.add(new String[]{pdb, ligand});
+                }
+            }
+        }
+        // Fallback in case there is no nested table or parsing fails
+        if (list.isEmpty()) {
+            final String text = cleanText(cell.text());
+            if (!text.isEmpty()) {
+                list.add(new String[]{text, ""});
+            }
+        }
+        return list;
     }
 
     @Override
     protected String[] expectedFileNames() {
-        return new String[]{DATA_FILE_NAME, EC_FILE_NAME, "prot.accession2taxid.gz", "idmapping.dat.gz"};
+        return new String[]{DATA_FILE_NAME, STRUCTURES_FILE_NAME, "prot.accession2taxid"};
     }
 }
