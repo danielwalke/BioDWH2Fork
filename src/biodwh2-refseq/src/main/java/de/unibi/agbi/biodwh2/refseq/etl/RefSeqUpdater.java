@@ -1,88 +1,80 @@
 package de.unibi.agbi.biodwh2.refseq.etl;
 
 import de.unibi.agbi.biodwh2.core.Workspace;
-import de.unibi.agbi.biodwh2.core.etl.MultiFileFTPWebUpdater;
+import de.unibi.agbi.biodwh2.core.etl.Updater;
 import de.unibi.agbi.biodwh2.core.exceptions.UpdaterConnectionException;
 import de.unibi.agbi.biodwh2.core.exceptions.UpdaterException;
-import de.unibi.agbi.biodwh2.core.net.HTTPFTPClient;
+import de.unibi.agbi.biodwh2.core.model.Version;
 import de.unibi.agbi.biodwh2.refseq.RefSeqDataSource;
+import org.apache.commons.lang3.StringUtils;
 
-import java.io.IOException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.io.BufferedReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
-public class RefSeqUpdater extends MultiFileFTPWebUpdater<RefSeqDataSource> {
-    private static final Pattern VERSION_PATTERN = Pattern.compile("GCF_\\d+\\.(\\d+)_.+");
-    // GCF_000001405.40_GRCh38.p14_genomic.gff.gz
-    private static final Pattern GENOMIC_GFF_PATTERN = Pattern.compile(".+_genomic\\.gff\\.gz");
-    private static final String HOMO_SAPIENS_ASSEMBLIES_PATH = "vertebrate_mammalian/Homo_sapiens/all_assembly_versions/";
+public class RefSeqUpdater extends Updater<RefSeqDataSource> {
+    private static final String ASSEMBLY_SUMMARY_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/refseq/assembly_summary_refseq.txt";
+    private static final String ID_MAPPING_URL = "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping_selected.tab.gz";
 
     public RefSeqUpdater(final RefSeqDataSource dataSource) {
         super(dataSource);
     }
 
     @Override
-    protected String getFTPIndexUrl() {
-        return "https://ftp.ncbi.nlm.nih.gov/genomes/refseq/";
+    public Version getNewestVersion(final Workspace workspace) throws UpdaterException {
+        // Force update by returning a version slightly newer than what's normally expected if needed,
+        // or just let it update if version is missing. For simplicity, we return current date components.
+        java.time.LocalDate now = java.time.LocalDate.now();
+        return new Version(now.getYear(), now.getMonthValue(), now.getDayOfMonth());
     }
 
     @Override
-    protected String[] getFilePaths(final Workspace workspace) throws UpdaterException {
-        final String assemblyPath = findAssemblyPath(workspace);
+    protected boolean tryUpdateFiles(final Workspace workspace) throws UpdaterException {
         try {
-            final HTTPFTPClient.Entry[] assemblyFiles = client.listDirectory(assemblyPath);
-            for (final HTTPFTPClient.Entry file : assemblyFiles) {
-                final Matcher matcher = GENOMIC_GFF_PATTERN.matcher(file.name);
-                if (matcher.find())
-                    return new String[]{assemblyPath + '/' + file.name};
-            }
-        } catch (IOException e) {
-            throw new UpdaterConnectionException(e);
-        }
-        throw new UpdaterConnectionException("Could not find files on RefSeq FTP");
-    }
+            downloadFileAsBrowser(workspace, ASSEMBLY_SUMMARY_URL, "assembly_summary_refseq.txt");
+            downloadFileAsBrowser(workspace, ID_MAPPING_URL, "idmapping_selected.tab.gz");
 
-    private String findAssemblyPath(final Workspace workspace) throws UpdaterException {
-        String assemblyPath;
-        final String desiredAssembly = dataSource.getStringProperty(workspace, "assembly");
-        try {
-            final HTTPFTPClient.Entry[] assemblies = client.listDirectory(HOMO_SAPIENS_ASSEMBLIES_PATH);
-            if (desiredAssembly != null)
-                assemblyPath = findDesiredAssembly(assemblies, desiredAssembly);
-            else
-                assemblyPath = findNewestAssembly(assemblies);
-        } catch (IOException e) {
-            throw new UpdaterConnectionException(e);
-        }
-        if (assemblyPath == null) {
-            if (desiredAssembly == null)
-                throw new UpdaterConnectionException("Could not find newest assembly on RefSeq FTP");
-            else
-                throw new UpdaterConnectionException("Could not find desired assembly on RefSeq FTP");
-        }
-        return assemblyPath;
-    }
+            Path summaryPath = dataSource.resolveSourceFilePath(workspace, "assembly_summary_refseq.txt");
+            String catProp = dataSource.getStringProperty(workspace, "categories");
+            if (catProp == null) catProp = "bacteria,archaea,fungi,viral,protozoa,vertebrate_mammalian";
+            Set<String> targetCategories = new HashSet<>(Arrays.asList(StringUtils.split(catProp, ',')));
 
-    private String findDesiredAssembly(final HTTPFTPClient.Entry[] assemblies, final String desiredAssembly) {
-        for (final HTTPFTPClient.Entry assembly : assemblies)
-            if (assembly.name.contains(desiredAssembly))
-                return HOMO_SAPIENS_ASSEMBLIES_PATH + assembly.name;
-        return null;
-    }
-
-    private String findNewestAssembly(final HTTPFTPClient.Entry[] assemblies) {
-        Integer maxVersion = null;
-        HTTPFTPClient.Entry maxAssembly = null;
-        for (final HTTPFTPClient.Entry assembly : assemblies) {
-            final Matcher matcher = VERSION_PATTERN.matcher(assembly.name);
-            if (matcher.find()) {
-                final int version = Integer.parseInt(matcher.group(1));
-                if (maxVersion == null || version > maxVersion) {
-                    maxVersion = version;
-                    maxAssembly = assembly;
+            try (BufferedReader reader = Files.newBufferedReader(summaryPath, StandardCharsets.UTF_8)) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.startsWith("#")) continue;
+                    String[] parts = StringUtils.splitByWholeSeparatorPreserveAllTokens(line, "\t");
+                    if (parts.length > 20) {
+                        String refseqCategory = parts[4];
+                        String group = parts[24];
+                        String ftpPath = parts[19];
+                        if ("reference genome".equals(refseqCategory) && targetCategories.contains(group)) {
+                            if (!"na".equals(ftpPath)) {
+                                String folderName = ftpPath.substring(ftpPath.lastIndexOf('/') + 1);
+                                String fileUrl = ftpPath + "/" + folderName + "_genomic.gff.gz";
+                                String fileName = folderName + "_genomic.gff.gz";
+                                Path targetPath = dataSource.resolveSourceFilePath(workspace, fileName);
+                                if (!Files.exists(targetPath)) {
+                                    System.out.println("Downloading " + fileName + "...");
+                                    downloadFileAsBrowser(workspace, fileUrl, fileName);
+                                }
+                            }
+                        }
+                    }
                 }
             }
+        } catch (Exception e) {
+            throw new UpdaterConnectionException(e);
         }
-        return maxAssembly == null ? null : HOMO_SAPIENS_ASSEMBLIES_PATH + maxAssembly.name;
+        return true;
+    }
+
+    @Override
+    protected String[] expectedFileNames() {
+        return new String[]{"assembly_summary_refseq.txt", "idmapping_selected.tab.gz"};
     }
 }

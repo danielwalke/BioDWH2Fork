@@ -19,6 +19,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+import de.unibi.agbi.biodwh2.core.model.graph.IndexDescription;
+
 public class RefSeqGraphExporter extends GraphExporter<RefSeqDataSource> {
     private static final Logger LOGGER = LogManager.getLogger(RefSeqGraphExporter.class);
     static final String ASSEMBLY_LABEL = "Assembly";
@@ -43,6 +45,7 @@ public class RefSeqGraphExporter extends GraphExporter<RefSeqDataSource> {
     private final Set<String> unhandledAttributeKeys = new HashSet<>();
     private final Set<String> unhandledLabels = new HashSet<>();
     private final Set<String> unhandledXrefPrefixes = new HashSet<>();
+    private Map<String, List<String>> refseqToUniprotMap;
 
     public RefSeqGraphExporter(final RefSeqDataSource dataSource) {
         super(dataSource);
@@ -131,29 +134,97 @@ public class RefSeqGraphExporter extends GraphExporter<RefSeqDataSource> {
     protected boolean exportGraph(final Workspace workspace, final Graph graph) throws ExporterException {
         graph.addIndex(IndexDescription.forNode(ASSEMBLY_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(CHROMOSOME_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(CDS_LABEL, "_protein_id_stripped", IndexDescription.Type.NON_UNIQUE));
+        graph.addIndex(IndexDescription.forNode(M_RNA_LABEL, "_transcript_id_stripped", IndexDescription.Type.NON_UNIQUE));
+        graph.addIndex(IndexDescription.forNode(NC_RNA_LABEL, "_transcript_id_stripped", IndexDescription.Type.NON_UNIQUE));
+        graph.addIndex(IndexDescription.forNode(R_RNA_LABEL, "_transcript_id_stripped", IndexDescription.Type.NON_UNIQUE));
+        graph.addIndex(IndexDescription.forNode(T_RNA_LABEL, "_transcript_id_stripped", IndexDescription.Type.NON_UNIQUE));
+        
         exportFeatures(workspace, graph);
+        applyUniprotMappings(workspace, graph);
         return true;
     }
 
-    private void exportFeatures(final Workspace workspace, final Graph graph) {
-        // TODO: dynamic file name
-        final Node assemblyNode = graph.addNode(ASSEMBLY_LABEL, ID_KEY, "GCF_000001405.40", "name", "GRCh38.p14",
-                                                "ncbi_taxid", 9606);
-        final Map<String, Long> chromosomeNameNodeIdMap = new HashMap<>();
-        final Map<String, Long> idNodeIdMap = new HashMap<>();
-        try (final InputStream inputStream = FileUtils.openGzip(workspace, dataSource,
-                                                                "GCF_000001405.40_GRCh38.p14_genomic.gff.gz");
-             final GFF3Reader reader = new GFF3Reader(inputStream, StandardCharsets.UTF_8)) {
-            for (final GFF3Entry entry : reader) {
-                if (entry instanceof GFF3DataEntry) {
-                    final GFF3DataEntry dataEntry = (GFF3DataEntry) entry;
-                    final String featureType = dataEntry.getAttribute("gbkey");
-                    if ("Src".equals(featureType)) {
-                        exportChromosome(graph, assemblyNode, chromosomeNameNodeIdMap, dataEntry);
-                    } else {
-                        exportFeature(graph, chromosomeNameNodeIdMap, idNodeIdMap, dataEntry);
+    private void applyUniprotMappings(final Workspace workspace, final Graph graph) {
+        try (final InputStream inputStream = FileUtils.openGzip(workspace, dataSource, "idmapping_selected.tab.gz");
+             final Scanner scanner = new Scanner(inputStream, StandardCharsets.UTF_8.name())) {
+            while (scanner.hasNextLine()) {
+                final String line = scanner.nextLine();
+                if (line.isEmpty()) continue;
+                final String[] parts = StringUtils.splitByWholeSeparatorPreserveAllTokens(line, "\t");
+                if (parts.length > 3) {
+                    final String uniprotId = parts[0];
+                    final String refseqIds = parts[3];
+                    if (!refseqIds.isEmpty()) {
+                        for (String refseqId : StringUtils.split(refseqIds, ';')) {
+                            String targetId = stripVersion(refseqId.trim());
+                            for (Node node : graph.findNodes("_protein_id_stripped", targetId)) {
+                                appendUniProtXref(graph, node, uniprotId);
+                            }
+                            for (Node node : graph.findNodes("_transcript_id_stripped", targetId)) {
+                                appendUniProtXref(graph, node, uniprotId);
+                            }
+                        }
                     }
                 }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Could not apply idmapping_selected.tab.gz mappings", e);
+        }
+    }
+
+    private void appendUniProtXref(Graph graph, Node node, String uniprotId) {
+        String[] existingXrefs = node.getProperty("xrefs");
+        Set<String> xrefs = new HashSet<>();
+        if (existingXrefs != null) {
+            Collections.addAll(xrefs, existingXrefs);
+        }
+        if (xrefs.add("UniProt:" + uniprotId)) {
+            node.setProperty("xrefs", xrefs.toArray(new String[0]));
+            graph.update(node);
+        }
+    }
+
+    private String stripVersion(String id) {
+        final int indexOfVersionDot = id.lastIndexOf('.');
+        return indexOfVersionDot == -1 ? id : id.substring(0, indexOfVersionDot);
+    }
+
+    private void exportFeatures(final Workspace workspace, final Graph graph) {
+        final Map<String, Long> chromosomeNameNodeIdMap = new HashMap<>();
+        final Map<String, Long> idNodeIdMap = new HashMap<>();
+        
+        try {
+            java.nio.file.Path sourceFolderPath = dataSource.getSourceFolderPath(workspace);
+            try (java.util.stream.Stream<java.nio.file.Path> paths = java.nio.file.Files.list(sourceFolderPath)) {
+                paths.filter(p -> p.toString().endsWith("_genomic.gff.gz")).forEach(filePath -> {
+                    String fileName = filePath.getFileName().toString();
+                    String[] nameParts = StringUtils.split(fileName, "_");
+                    String assemblyId = nameParts.length >= 2 ? nameParts[0] + "_" + nameParts[1] : fileName;
+                    String assemblyName = nameParts.length > 3 ? nameParts[2] : assemblyId;
+                    
+                    Node assemblyNode = graph.findNode(ASSEMBLY_LABEL, ID_KEY, assemblyId);
+                    if (assemblyNode == null) {
+                        assemblyNode = graph.addNode(ASSEMBLY_LABEL, ID_KEY, assemblyId, "name", assemblyName);
+                    }
+                    
+                    try (final InputStream inputStream = FileUtils.openGzip(workspace, dataSource, fileName);
+                         final GFF3Reader reader = new GFF3Reader(inputStream, StandardCharsets.UTF_8)) {
+                        for (final GFF3Entry entry : reader) {
+                            if (entry instanceof GFF3DataEntry) {
+                                final GFF3DataEntry dataEntry = (GFF3DataEntry) entry;
+                                final String featureType = dataEntry.getAttribute("gbkey");
+                                if ("Src".equals(featureType)) {
+                                    exportChromosome(graph, assemblyNode, chromosomeNameNodeIdMap, dataEntry);
+                                } else {
+                                    exportFeature(graph, chromosomeNameNodeIdMap, idNodeIdMap, dataEntry);
+                                }
+                            }
+                        }
+                    } catch (IOException e) {
+                        LOGGER.error("Error parsing " + fileName, e);
+                    }
+                });
             }
         } catch (IOException e) {
             throw new ExporterFormatException(e);
@@ -212,8 +283,17 @@ public class RefSeqGraphExporter extends GraphExporter<RefSeqDataSource> {
         builder.withProperty(ID_KEY, id);
         for (final String key : dataEntry.getAttributeKeys())
             addAttributeToFeatureNodeBuilder(dataEntry, builder, key, dataEntry.getAttribute(key));
+        String proteinId = dataEntry.getAttribute("protein_id");
+        String transcriptId = dataEntry.getAttribute("transcript_id");
+        if (proteinId != null) {
+            builder.withProperty("_protein_id_stripped", stripVersion(proteinId));
+        }
+        if (transcriptId != null) {
+            builder.withProperty("_transcript_id_stripped", stripVersion(transcriptId));
+        }
         final Node node = builder.build();
         final long nodeId = node.getId();
+        
         idNodeIdMap.put(id, nodeId);
         return nodeId;
     }

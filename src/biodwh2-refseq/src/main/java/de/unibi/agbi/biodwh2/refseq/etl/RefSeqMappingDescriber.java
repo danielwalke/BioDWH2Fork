@@ -66,6 +66,9 @@ public class RefSeqMappingDescriber extends MappingDescriber {
                     case "GeneID":
                         description.addIdentifier(IdentifierType.NCBI_GENE, Integer.parseInt(xrefParts[1]));
                         break;
+                    case "UniProt":
+                        description.addIdentifier(IdentifierType.UNIPROT_KB, xrefParts[1]);
+                        break;
                 }
             }
         }
@@ -88,6 +91,9 @@ public class RefSeqMappingDescriber extends MappingDescriber {
                         break;
                     case "Ensembl":
                         description.addIdentifier(IdentifierType.ENSEMBL, xrefParts[1]);
+                        break;
+                    case "UniProt":
+                        description.addIdentifier(IdentifierType.UNIPROT_KB, xrefParts[1]);
                         break;
                 }
             }
@@ -113,6 +119,9 @@ public class RefSeqMappingDescriber extends MappingDescriber {
                         break;
                     case "Ensembl":
                         description.addIdentifier(IdentifierType.ENSEMBL, xrefParts[1]);
+                        break;
+                    case "UniProt":
+                        description.addIdentifier(IdentifierType.UNIPROT_KB, xrefParts[1]);
                         break;
                 }
             }
