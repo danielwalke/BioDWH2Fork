@@ -54,6 +54,9 @@ public class RefSeqUpdater extends Updater<RefSeqDataSource> {
                         String ftpPath = parts[19];
                         if ("reference genome".equals(refseqCategory) && targetCategories.contains(group)) {
                             if (!"na".equals(ftpPath)) {
+                                if (ftpPath.endsWith("/")) {
+                                    ftpPath = ftpPath.substring(0, ftpPath.length() - 1);
+                                }
                                 String folderName = ftpPath.substring(ftpPath.lastIndexOf('/') + 1);
                                 String fileUrl = ftpPath + "/" + folderName + "_genomic.gff.gz";
                                 String fileName = folderName + "_genomic.gff.gz";
