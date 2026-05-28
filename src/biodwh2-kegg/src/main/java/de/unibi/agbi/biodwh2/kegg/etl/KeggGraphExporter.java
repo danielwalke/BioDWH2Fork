@@ -450,67 +450,30 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
      * Row format: <gene_id>\t<path:orgXXXXX>   e.g. "hsa:10327\tpath:hsa00010"
      */
     private void exportPathwayPerOrganismLinks(final Workspace workspace, final Graph graph) {
-        final Map<String, Long> geneIdToNodeId = new HashMap<>();
-        for (final Node gene : graph.findNodes(GENE_LABEL)) {
-            final String id = gene.getProperty("id");
-            if (id != null)
-                geneIdToNodeId.put(id, gene.getId());
-        }
         final Map<String, Long> pathwayIdToNodeId = new HashMap<>();
-        for (final Node pathway : graph.findNodes(PATHWAY_LABEL))
+        for (final Node pathway : graph.findNodes(PATHWAY_LABEL)) {
             pathwayIdToNodeId.put(pathway.getProperty("id"), pathway.getId());
+        }
 
         long edgesCreated = 0;
         for (final String[] row : openTSV(workspace, KeggUpdater.PATHWAY_PER_ORGANISM_FILE_NAME)) {
             if (row != null && row.length == 2) {
-                final String geneKeggId = row[0].trim();                    // e.g. hsa:10327
-                final String pathwayKeggId = stripPrefix(row[1].trim());    // e.g. hsa00010
+                final String geneKeggId = row[0].trim();
+                final String pathwayKeggId = stripPrefix(row[1].trim());
                 final String pathwayNum = pathwayKeggId.replaceAll("[^0-9]", "");
-                final Long geneNodeId = geneIdToNodeId.get(geneKeggId);
+
+                final Node geneNode = graph.findNode(GENE_LABEL, "id", geneKeggId);
                 final Long pathwayNodeId = pathwayIdToNodeId.get("map" + pathwayNum);
-                if (geneNodeId != null && pathwayNodeId != null) {
-                    graph.addEdge(geneNodeId, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
+
+                if (geneNode != null && pathwayNodeId != null) {
+                    graph.addEdge(geneNode, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
                     edgesCreated++;
                 }
             }
         }
-        if (LOGGER.isInfoEnabled())
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Gene→Pathway (all organisms) edges created: " + edgesCreated);
-    }
-
-    /**
-     * Exports gene→pathway links from link/pathway/hsa.
-     * Format: hsa:10327  path:hsa00010
-     * Gene node id is stored as "hsa:10327" (full prefixed form).
-     * Pathway node id is stored as "map00010" (reference pathway, organism-agnostic).
-     */
-    private void exportPathwayHsaLinks(final Workspace workspace, final Graph graph) {
-        final Map<String, Long> geneIdToNodeId = new HashMap<>();
-        for (final Node gene : graph.findNodes(GENE_LABEL)) {
-            final String id = gene.getProperty("id");
-            if (id != null)
-                geneIdToNodeId.put(id, gene.getId());
         }
-        final Map<String, Long> pathwayIdToNodeId = new HashMap<>();
-        for (final Node pathway : graph.findNodes(PATHWAY_LABEL))
-            pathwayIdToNodeId.put(pathway.getProperty("id"), pathway.getId());
-
-        long edgesCreated = 0;
-        for (final String[] row : openTSV(workspace, KeggUpdater.PATHWAY_HSA_FILE_NAME)) {
-            if (row != null && row.length == 2) {
-                final String geneKeggId = row[0].trim();                    // hsa:10327
-                final String pathwayKeggId = stripPrefix(row[1].trim());    // hsa00010
-                final String pathwayNum = pathwayKeggId.replaceAll("[^0-9]", "");
-                final Long geneNodeId = geneIdToNodeId.get(geneKeggId);
-                final Long pathwayNodeId = pathwayIdToNodeId.get("map" + pathwayNum);
-                if (geneNodeId != null && pathwayNodeId != null) {
-                    graph.addEdge(geneNodeId, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
-                    edgesCreated++;
-                }
-            }
-        }
-        if (LOGGER.isInfoEnabled())
-            LOGGER.info("Gene→Pathway (hsa) edges created: " + edgesCreated);
     }
 
     private void exportLinkTSV(Workspace workspace, Graph graph, String fileName, String label1, String label2, String edgeLabel) {
