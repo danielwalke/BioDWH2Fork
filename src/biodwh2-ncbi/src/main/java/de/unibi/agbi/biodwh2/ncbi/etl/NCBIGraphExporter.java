@@ -29,7 +29,6 @@ import de.unibi.agbi.biodwh2.ncbi.NCBIDataSource;
 // import de.unibi.agbi.biodwh2.ncbi.model.ProteinRecord;
 import de.unibi.agbi.biodwh2.ncbi.parser.NCBITaxonParser;
 // import de.unibi.agbi.biodwh2.ncbi.parser.NCBIProteinParser;
-import de.unibi.agbi.biodwh2.core.model.TimeBottleNecks;
  
 public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
     private static final Logger LOGGER = LogManager.getLogger(NCBIGraphExporter.class);
@@ -60,10 +59,7 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         // proteinIdNodeIdMap = new HashMap<>();
  
         try {
-            long start = System.currentTimeMillis();
-            exportTaxonDatabase(workspace, dataSource, graph);
-            LOGGER.info("Exported TaxonDatabase in {}", TimeBottleNecks.formatElapsed(System.currentTimeMillis() - start));
- 
+            exportTaxonDatabase(workspace, dataSource, graph); 
             // start = System.currentTimeMillis();
             // exportGeneDatabase(workspace, dataSource, graph);
             // LOGGER.info("Exported GeneDatabase in {}", TimeBottleNecks.formatElapsed(System.currentTimeMillis() - start));
