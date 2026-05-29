@@ -7,9 +7,10 @@ import de.unibi.agbi.biodwh2.core.model.Version;
 import de.unibi.agbi.biodwh2.eggnog.EggnogDataSource;
 
 public class EggnogUpdater extends Updater<EggnogDataSource> {
-    static final String TAXID_INFO_FILE = "e5.taxid_info.tsv";
-    static final String OG_ANNOTATIONS_FILE = "e5.og_annotations.tsv";
-    private static final String BASE_URL = "http://eggnog5.embl.de/download/eggnog_5.0/";
+    static final String[] MAPPING_FILES = new String[]{
+            "latest.Archaea.tsv.gz", "latest.Bacteria.tsv.gz", "latest.Eukaryota.tsv.gz"
+    };
+    private static final String BASE_URL = "http://eggnog5.embl.de/download/eggnog_5.0/id_mappings/uniprot/";
 
     public EggnogUpdater(final EggnogDataSource dataSource) {
         super(dataSource);
@@ -22,13 +23,14 @@ public class EggnogUpdater extends Updater<EggnogDataSource> {
 
     @Override
     protected boolean tryUpdateFiles(final Workspace workspace) throws UpdaterException {
-        downloadFileAsBrowser(workspace, BASE_URL + TAXID_INFO_FILE, TAXID_INFO_FILE);
-        downloadFileAsBrowser(workspace, BASE_URL + OG_ANNOTATIONS_FILE, OG_ANNOTATIONS_FILE);
+        for (String file : MAPPING_FILES) {
+            downloadFileAsBrowser(workspace, BASE_URL + file, file);
+        }
         return true;
     }
 
     @Override
     protected String[] expectedFileNames() {
-        return new String[]{TAXID_INFO_FILE, OG_ANNOTATIONS_FILE};
+        return MAPPING_FILES;
     }
 }

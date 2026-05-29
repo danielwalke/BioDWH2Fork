@@ -11,10 +11,13 @@ import de.unibi.agbi.biodwh2.eggnog.EggnogDataSource;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.*;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.zip.GZIPInputStream;
 
 public class EggnogGraphExporter extends GraphExporter<EggnogDataSource> {
-    static final String TAXON_LABEL = "Taxon";
-    static final String ORTHOLOGOUS_GROUP_LABEL = "OrthologousGroup";
+    static final String PROTEIN_LABEL = "EggNogProtein";
 
     public EggnogGraphExporter(final EggnogDataSource dataSource) {
         super(dataSource);
@@ -22,65 +25,47 @@ public class EggnogGraphExporter extends GraphExporter<EggnogDataSource> {
 
     @Override
     public long getExportVersion() {
-        return 2;
+        return 3;
     }
 
     @Override
     protected boolean exportGraph(final Workspace workspace, final Graph graph) throws ExporterException {
-        graph.addIndex(IndexDescription.forNode(TAXON_LABEL, "id", IndexDescription.Type.UNIQUE));
-        graph.addIndex(IndexDescription.forNode(ORTHOLOGOUS_GROUP_LABEL, "id", IndexDescription.Type.UNIQUE));
-        exportTaxa(workspace, graph);
-        exportOrthologousGroups(workspace, graph);
+        graph.addIndex(IndexDescription.forNode(PROTEIN_LABEL, "uniprot_id", IndexDescription.Type.UNIQUE));
+        for (String fileName : EggnogUpdater.MAPPING_FILES) {
+            exportMappingFile(workspace, graph, fileName);
+        }
         return true;
     }
 
-    private void exportTaxa(final Workspace workspace, final Graph graph) {
-        final java.nio.file.Path filePath = dataSource.resolveSourceFilePath(workspace, EggnogUpdater.TAXID_INFO_FILE);
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath.toFile()))) {
+    private void exportMappingFile(final Workspace workspace, final Graph graph, final String fileName) {
+        final java.nio.file.Path filePath = dataSource.resolveSourceFilePath(workspace, fileName);
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new GZIPInputStream(new FileInputStream(filePath.toFile()))))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.startsWith("#") || line.trim().isEmpty()) continue;
                 String[] parts = StringUtils.splitByWholeSeparatorPreserveAllTokens(line, "\t");
-                if (parts.length >= 5) {
-                    graph.addNode(TAXON_LABEL,
-                            "id", parts[0],
-                            "scientific_name", parts[1],
-                            "rank", parts[2],
-                            "named_lineage", parts[3],
-                            "taxid_lineage", parts[4]
-                    );
-                }
-            }
-        } catch (IOException e) {
-            throw new ExporterFormatException("Failed to parse " + EggnogUpdater.TAXID_INFO_FILE, e);
-        }
-    }
-
-    private void exportOrthologousGroups(final Workspace workspace, final Graph graph) {
-        final java.nio.file.Path filePath = dataSource.resolveSourceFilePath(workspace, EggnogUpdater.OG_ANNOTATIONS_FILE);
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath.toFile()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.startsWith("#") || line.trim().isEmpty()) continue;
-                String[] parts = StringUtils.splitByWholeSeparatorPreserveAllTokens(line, "\t");
-                if (parts.length >= 4) {
-                    final String ogId = parts[1];
-                    Node ogNode = graph.findNode(ORTHOLOGOUS_GROUP_LABEL, "id", ogId);
-                    if (ogNode == null) {
-                        ogNode = graph.addNode(ORTHOLOGOUS_GROUP_LABEL,
-                                "id", ogId,
-                                "cog_category", parts[2],
-                                "annotation", parts[3]
-                        );
-                    }
-                    Node taxonNode = graph.findNode(TAXON_LABEL, "id", parts[0]);
-                    if (taxonNode != null) {
-                        graph.addEdge(ogNode, taxonNode, "BELONGS_TO");
+                if (parts.length >= 2) {
+                    String uniprotId = parts[0];
+                    String[] eggnogGroups = StringUtils.split(parts[1], ",");
+                    Node node = graph.findNode(PROTEIN_LABEL, "uniprot_id", uniprotId);
+                    if (node == null) {
+                        graph.addNode(PROTEIN_LABEL, "uniprot_id", uniprotId, "eggnog_groups", eggnogGroups);
+                    } else {
+                        String[] existingGroups = node.getProperty("eggnog_groups");
+                        if (existingGroups != null) {
+                            Set<String> merged = new HashSet<>(Arrays.asList(existingGroups));
+                            merged.addAll(Arrays.asList(eggnogGroups));
+                            node.setProperty("eggnog_groups", merged.toArray(new String[0]));
+                        } else {
+                            node.setProperty("eggnog_groups", eggnogGroups);
+                        }
+                        graph.update(node);
                     }
                 }
             }
         } catch (IOException e) {
-            throw new ExporterFormatException("Failed to parse " + EggnogUpdater.OG_ANNOTATIONS_FILE, e);
+            throw new ExporterFormatException("Failed to parse " + fileName, e);
         }
     }
 }

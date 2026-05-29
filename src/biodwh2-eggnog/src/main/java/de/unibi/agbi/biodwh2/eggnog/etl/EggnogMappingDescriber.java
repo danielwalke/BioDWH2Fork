@@ -12,15 +12,22 @@ public class EggnogMappingDescriber extends MappingDescriber {
 
     @Override
     public NodeMappingDescription[] describe(final Graph graph, final Node node, final String localMappingLabel) {
-        if (EggnogGraphExporter.TAXON_LABEL.equals(localMappingLabel))
-            return describeTaxon(node);
+        if (EggnogGraphExporter.PROTEIN_LABEL.equals(localMappingLabel))
+            return describeProtein(node);
         return null;
     }
 
-    private NodeMappingDescription[] describeTaxon(final Node node) {
-        final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.TAXON);
-        description.addIdentifier(IdentifierType.NCBI_TAXON, node.<String>getProperty("id"));
-        description.addName(node.getProperty("scientific_name"));
+    private NodeMappingDescription[] describeProtein(final Node node) {
+        final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.PROTEIN);
+        description.addIdentifier(IdentifierType.UNIPROT_KB, node.<String>getProperty("uniprot_id"));
+        
+        String[] eggnogGroups = node.getProperty("eggnog_groups");
+        if (eggnogGroups != null) {
+            for (String group : eggnogGroups) {
+                description.addIdentifier("EGGNOG", group);
+            }
+        }
+        
         return new NodeMappingDescription[]{description};
     }
 
@@ -31,7 +38,7 @@ public class EggnogMappingDescriber extends MappingDescriber {
 
     @Override
     protected String[] getNodeMappingLabels() {
-        return new String[]{EggnogGraphExporter.TAXON_LABEL};
+        return new String[]{EggnogGraphExporter.PROTEIN_LABEL};
     }
 
     @Override
