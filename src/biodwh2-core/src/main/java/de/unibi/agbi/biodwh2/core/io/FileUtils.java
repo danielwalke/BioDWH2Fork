@@ -11,6 +11,8 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.fasterxml.jackson.dataformat.xml.deser.FromXmlParser;
 import de.unibi.agbi.biodwh2.core.DataSource;
 import de.unibi.agbi.biodwh2.core.Workspace;
+
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 
 import javax.xml.stream.XMLInputFactory;
@@ -541,5 +543,24 @@ public final class FileUtils {
         while ((token = parser.nextToken()) != null)
             if (token.isStructStart())
                 consumer.accept(xmlMapper.readValue(parser, _class));
+    }
+
+    // method to read specific file from a tar.gz downloaded dir (NCBI taxon)
+    public static BufferedReader openTarGzipDmpEntry(
+            final Workspace workspace,
+            final DataSource dataSource,
+            final String fileName,
+            final String entryName
+    ) throws IOException {
+        final TarArchiveInputStream stream = openTarGzip(workspace, dataSource, fileName);
+
+        TarArchiveEntry entry;
+        while ((entry = stream.getNextTarEntry()) != null) {
+            if (entry.getName().equals(entryName)) {
+                return createBufferedReaderFromStream(stream);
+            }
+        }
+
+        throw new IOException("Entry not found in " + fileName + ": " + entryName);
     }
 }
