@@ -173,9 +173,15 @@ public final class GFF3Reader extends BaseReader<GFF3Entry> {
             final String[] attributePairs = StringUtils.split(line, ';');
             for (final String pair : attributePairs) {
                 final String[] parts = StringUtils.split(pair, '=');
-                final String tag = replaceEscapedChars(parts[0].trim());
-                final String value = replaceEscapedChars(parts[1].trim());
-                result.put(tag, value);
+                if (parts.length > 0) {
+                    final String tag = replaceEscapedChars(parts[0].trim());
+                    if (parts.length > 1) {
+                        final String value = replaceEscapedChars(parts[1].trim());
+                        result.put(tag, value);
+                    } else {
+                        result.put(tag, "");
+                    }
+                }
             }
         }
         return result;

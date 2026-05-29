@@ -476,6 +476,9 @@ public class RefSeqGraphExporter extends GraphExporter<RefSeqDataSource> {
                 case "RFAM":
                 case "VISTA":
                 case "IMGT/GENE-DB":
+                case "EnsemblGenomes-Gn":
+                case "EnsemblGenomes-Tr":
+                case "PSEUDO":
                     // TODO
                     break;
                 default:
