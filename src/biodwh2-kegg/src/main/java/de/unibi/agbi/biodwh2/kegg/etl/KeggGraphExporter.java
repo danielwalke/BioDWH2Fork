@@ -456,17 +456,39 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         }
 
         long edgesCreated = 0;
+        final Map<String, Long> geneIdToNodeId = new HashMap<>();
+        String currentOrganism = null;
+
         for (final String[] row : openTSV(workspace, KeggUpdater.PATHWAY_PER_ORGANISM_FILE_NAME)) {
             if (row != null && row.length == 2) {
                 final String geneKeggId = row[0].trim();
                 final String pathwayKeggId = stripPrefix(row[1].trim());
                 final String pathwayNum = pathwayKeggId.replaceAll("[^0-9]", "");
 
-                final Node geneNode = graph.findNode(GENE_LABEL, "id", geneKeggId);
+                final int colonIndex = geneKeggId.indexOf(':');
+                if (colonIndex > 0) {
+                    final String org = geneKeggId.substring(0, colonIndex);
+                    if (!org.equals(currentOrganism)) {
+                        geneIdToNodeId.clear();
+                        currentOrganism = org;
+                    }
+                }
+
+                Long geneNodeId = geneIdToNodeId.get(geneKeggId);
+                if (geneNodeId == null && !geneIdToNodeId.containsKey(geneKeggId)) {
+                    final Node geneNode = graph.findNode(GENE_LABEL, "id", geneKeggId);
+                    if (geneNode != null) {
+                        geneNodeId = geneNode.getId();
+                        geneIdToNodeId.put(geneKeggId, geneNodeId);
+                    } else {
+                        geneIdToNodeId.put(geneKeggId, null);
+                    }
+                }
+
                 final Long pathwayNodeId = pathwayIdToNodeId.get("map" + pathwayNum);
 
-                if (geneNode != null && pathwayNodeId != null) {
-                    graph.addEdge(geneNode, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
+                if (geneNodeId != null && pathwayNodeId != null) {
+                    graph.addEdge(geneNodeId, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
                     edgesCreated++;
                 }
             }
