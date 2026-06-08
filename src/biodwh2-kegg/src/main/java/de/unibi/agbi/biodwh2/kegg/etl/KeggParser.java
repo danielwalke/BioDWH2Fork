@@ -80,7 +80,7 @@ public class KeggParser extends Parser<KeggDataSource> {
                 final String value = line.length() > 12 ? StringUtils.stripEnd(line.substring(12), null) : "";
                 if (!keyword.isEmpty())
                     chunk.add(new ChunkLine(keyword, value));
-                else
+                else if (!chunk.isEmpty())
                     chunk.get(chunk.size() - 1).value += '\n' + value;
             }
             reader.close();
