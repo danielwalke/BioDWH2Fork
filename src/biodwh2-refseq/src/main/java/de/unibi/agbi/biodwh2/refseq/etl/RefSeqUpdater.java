@@ -48,7 +48,7 @@ public class RefSeqUpdater extends Updater<RefSeqDataSource> {
                 while ((line = reader.readLine()) != null) {
                     if (line.startsWith("#")) continue;
                     String[] parts = StringUtils.splitByWholeSeparatorPreserveAllTokens(line, "\t");
-                    if (parts.length > 20) {
+                    if (parts.length > 24) {
                         String refseqCategory = parts[4];
                         String group = parts[24];
                         String ftpPath = parts[19];

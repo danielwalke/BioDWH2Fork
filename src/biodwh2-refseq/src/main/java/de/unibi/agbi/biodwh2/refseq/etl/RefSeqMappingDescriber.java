@@ -55,6 +55,8 @@ public class RefSeqMappingDescriber extends MappingDescriber {
         if (xrefs != null) {
             for (final String xref : xrefs) {
                 final String[] xrefParts = StringUtils.split(xref, ":", 2);
+                if (xrefParts.length < 2)
+                    continue;
                 switch (xrefParts[0]) {
                     case "HGNC":
                         final String hgncId = StringUtils.replace(xrefParts[1], "HGNC:", "");
@@ -82,6 +84,8 @@ public class RefSeqMappingDescriber extends MappingDescriber {
         if (xrefs != null) {
             for (final String xref : xrefs) {
                 final String[] xrefParts = StringUtils.split(xref, ":", 2);
+                if (xrefParts.length < 2)
+                    continue;
                 switch (xrefParts[0]) {
                     case "Genbank":
                         description.addIdentifier(IdentifierType.GENBANK, removeGenbankIdVersion(xrefParts[1]));
@@ -113,6 +117,8 @@ public class RefSeqMappingDescriber extends MappingDescriber {
         if (xrefs != null) {
             for (final String xref : xrefs) {
                 final String[] xrefParts = StringUtils.split(xref, ":", 2);
+                if (xrefParts.length < 2)
+                    continue;
                 switch (xrefParts[0]) {
                     case "Genbank":
                         description.addIdentifier(IdentifierType.GENBANK, removeGenbankIdVersion(xrefParts[1]));
