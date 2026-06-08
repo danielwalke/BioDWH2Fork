@@ -563,14 +563,16 @@ public class KeggParser extends Parser<KeggDataSource> {
                     reference.title = nextLine.value;
                     break;
                 case "  JOURNAL":
-                    final String[] parts = StringUtils.split(nextLine.value, '\n');
-                    reference.journal = parts[0];
-                    if (parts.length > 1) {
-                        for (int k = 1; k < parts.length; k++) {
-                            if (parts[k].startsWith("DOI:"))
-                                reference.doi = parts[k].substring(4).trim();
-                            else
-                                LOGGER.warn("Unknown journal line in: " + nextLine.value);
+                    final String[] parts = org.apache.commons.lang3.StringUtils.split(nextLine.value, '\n');
+                    if (parts.length > 0) {
+                        reference.journal = parts[0];
+                        if (parts.length > 1) {
+                            for (int k = 1; k < parts.length; k++) {
+                                if (parts[k].startsWith("DOI:"))
+                                    reference.doi = parts[k].substring(4).trim();
+                                else
+                                    LOGGER.warn("Unknown journal line in: " + nextLine.value);
+                            }
                         }
                     }
                     break;
