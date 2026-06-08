@@ -456,7 +456,7 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         }
 
         long edgesCreated = 0;
-        final Map<String, Long> geneIdToNodeId = new HashMap<>();
+        final java.util.TreeMap<String, java.util.List<Long>> currentOrgGeneToPathways = new java.util.TreeMap<>();
         String currentOrganism = null;
 
         for (final String[] row : openTSV(workspace, KeggUpdater.PATHWAY_PER_ORGANISM_FILE_NAME)) {
@@ -468,31 +468,41 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                 final int colonIndex = geneKeggId.indexOf(':');
                 if (colonIndex > 0) {
                     final String org = geneKeggId.substring(0, colonIndex);
+                    
                     if (!org.equals(currentOrganism)) {
-                        geneIdToNodeId.clear();
+                        for (final Map.Entry<String, java.util.List<Long>> entry : currentOrgGeneToPathways.entrySet()) {
+                            final Node geneNode = graph.findNode(GENE_LABEL, "id", entry.getKey());
+                            if (geneNode != null) {
+                                final Long geneNodeId = geneNode.getId();
+                                for (final Long pathwayNodeId : entry.getValue()) {
+                                    graph.addEdge(geneNodeId, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
+                                    edgesCreated++;
+                                }
+                            }
+                        }
+                        currentOrgGeneToPathways.clear();
                         currentOrganism = org;
                     }
                 }
 
-                Long geneNodeId = geneIdToNodeId.get(geneKeggId);
-                if (geneNodeId == null && !geneIdToNodeId.containsKey(geneKeggId)) {
-                    final Node geneNode = graph.findNode(GENE_LABEL, "id", geneKeggId);
-                    if (geneNode != null) {
-                        geneNodeId = geneNode.getId();
-                        geneIdToNodeId.put(geneKeggId, geneNodeId);
-                    } else {
-                        geneIdToNodeId.put(geneKeggId, null);
-                    }
-                }
-
                 final Long pathwayNodeId = pathwayIdToNodeId.get("map" + pathwayNum);
-
-                if (geneNodeId != null && pathwayNodeId != null) {
+                if (pathwayNodeId != null) {
+                    currentOrgGeneToPathways.computeIfAbsent(geneKeggId, k -> new ArrayList<>()).add(pathwayNodeId);
+                }
+            }
+        }
+        
+        for (final Map.Entry<String, java.util.List<Long>> entry : currentOrgGeneToPathways.entrySet()) {
+            final Node geneNode = graph.findNode(GENE_LABEL, "id", entry.getKey());
+            if (geneNode != null) {
+                final Long geneNodeId = geneNode.getId();
+                for (final Long pathwayNodeId : entry.getValue()) {
                     graph.addEdge(geneNodeId, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
                     edgesCreated++;
                 }
             }
         }
+        
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Gene→Pathway (all organisms) edges created: " + edgesCreated);
         }
