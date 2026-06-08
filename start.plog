@@ -196,3 +196,33 @@ tmpfs           5.0M     0  5.0M   0% /run/lock
 tmpfs            26G  8.0K   26G   1% /run/user/1005
 tmpfs            26G  8.0K   26G   1% /run/user/5143
 Finished!
+Already up to date.
+Pulled
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs            26G  2.9M   26G   1% /run
+efivarfs        512K  127K  381K  25% /sys/firmware/efi/efivars
+/dev/nvme0n1p4  1.8T  1.4T  343G  81% /
+tmpfs           126G   32K  126G   1% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+/dev/nvme0n1p3   20G  2.0G   17G  11% /var/log
+/dev/nvme0n1p2  974M  878M   29M  97% /boot
+/dev/nvme0n1p1  1.1G  6.1M  1.1G   1% /boot/efi
+/dev/md0p1      5.8T  158G  5.4T   3% /data
+tmpfs            26G  8.0K   26G   1% /run/user/1005
+tmpfs            26G  8.0K   26G   1% /run/user/5143
+Finished!
+Already up to date.
+Pulled
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs            26G  2.9M   26G   1% /run
+efivarfs        512K  127K  381K  25% /sys/firmware/efi/efivars
+/dev/nvme0n1p4  1.8T  1.4T  343G  81% /
+tmpfs           126G   32K  126G   1% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+/dev/nvme0n1p3   20G  2.0G   17G  11% /var/log
+/dev/nvme0n1p2  974M  878M   29M  97% /boot
+/dev/nvme0n1p1  1.1G  6.1M  1.1G   1% /boot/efi
+/dev/md0p1      5.8T  158G  5.4T   3% /data
+tmpfs            26G  8.0K   26G   1% /run/user/1005
+tmpfs            26G  8.0K   26G   1% /run/user/5143
+Finished!

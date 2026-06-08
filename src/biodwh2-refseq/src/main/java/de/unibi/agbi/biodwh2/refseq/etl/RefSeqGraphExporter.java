@@ -420,6 +420,8 @@ public class RefSeqGraphExporter extends GraphExporter<RefSeqDataSource> {
         final boolean isSNP = "sequence_alteration".equals(typeName);
         for (final String xref : StringUtils.split(value, ',')) {
             final String[] xrefParts = StringUtils.split(xref, ":", 2);
+            if (xrefParts.length < 2)
+                continue;
             final String prefix = xrefParts[0];
             final String suffix = xrefParts[1];
             switch (prefix) {
