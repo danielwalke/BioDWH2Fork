@@ -56,6 +56,7 @@ public class KeggParser extends Parser<KeggDataSource> {
         dataSource.drugs = parseKeggFile(workspace, dataSource, Drug.class, KeggUpdater.DRUG_FILE_NAME);
         dataSource.diseases = parseKeggFile(workspace, dataSource, Disease.class, KeggUpdater.DISEASE_FILE_NAME);
         dataSource.networks = parseKeggFile(workspace, dataSource, Network.class, KeggUpdater.NETWORK_FILE_NAME);
+        dataSource.pathways = parseKeggFile(workspace, dataSource, Pathway.class, KeggUpdater.PATHWAYS_FILE_NAME);
         return true;
     }
 
@@ -130,6 +131,8 @@ public class KeggParser extends Parser<KeggDataSource> {
                         i = processDrugGroupLine(chunk, line, i, (DrugGroup) entry);
                     else if (entryClass == Network.class)
                         i = processNetworkGroupLine(chunk, line, i, (Network) entry);
+                    else if (entryClass == Pathway.class)
+                        i = processPathwayLine(chunk, line, i, (Pathway) entry);
                     break;
             }
         }
@@ -482,6 +485,52 @@ public class KeggParser extends Parser<KeggDataSource> {
                 break;
             default:
                 logUnknownKeyword("Network", line.keyword);
+                break;
+        }
+        return i;
+    }
+
+    private int processPathwayLine(final ChunkLine[] chunk, final ChunkLine line, int i, final Pathway entry) {
+        final boolean lineNotEmpty = line.value.trim().length() > 0;
+        switch (line.keyword) {
+            case "NAME":
+                entry.names.addAll(Arrays.asList(StringUtils.split(line.value, '\n')));
+                break;
+            case "DESCRIPTION":
+                if (lineNotEmpty)
+                    entry.description = line.value;
+                break;
+            case "CLASS":
+                if (lineNotEmpty)
+                    for (String category : StringUtils.split(line.value, ';'))
+                        entry.classes.add(category.trim());
+                break;
+            case "PATHWAY_MAP":
+                if (lineNotEmpty)
+                    entry.pathwayMap = line.value;
+                break;
+            case "MODULE":
+                if (lineNotEmpty)
+                    entry.modules.addAll(parseMultilineIdNamePairs(line));
+                break;
+            case "DISEASE":
+                if (lineNotEmpty)
+                    entry.diseases.addAll(parseMultilineIdNamePairs(line));
+                break;
+            case "DRUG":
+                if (lineNotEmpty)
+                    entry.drugs.addAll(parseMultilineIdNamePairs(line));
+                break;
+            case "GENE":
+                if (lineNotEmpty)
+                    entry.genes.addAll(parseMultilineIdNamePairs(line));
+                break;
+            case "COMPOUND":
+                if (lineNotEmpty)
+                    entry.compounds.addAll(parseMultilineIdNamePairs(line));
+                break;
+            default:
+                logUnknownKeyword("Pathway", line.keyword);
                 break;
         }
         return i;

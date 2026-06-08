@@ -93,6 +93,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String RESTRICTED_ORGANISMS_FILE_NAME = "restricted_organisms.txt";
     static final String REACTIONS_FILE_NAME = "reactions.txt";
     static final String MODULES_FILE_NAME = "modules.txt";
+    static final String PATHWAYS_FILE_NAME = "pathways.txt";
     static final String ORGANISMS_FILE_NAME = "organisms.txt";
 
     public KeggUpdater(KeggDataSource dataSource) {
@@ -169,6 +170,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         tryDownloadFileAsBrowser(workspace, PATHWAY_HSA_URL, PATHWAY_HSA_FILE_NAME);
         downloadKeggEntries(workspace, REACTIONS_LIST_FILE_NAME, REACTIONS_FILE_NAME);
         downloadKeggEntries(workspace, MODULES_LIST_FILE_NAME, MODULES_FILE_NAME);
+        downloadKeggEntries(workspace, PATHWAYS_LIST_FILE_NAME, PATHWAYS_FILE_NAME);
         // downloadKeggEntries(workspace, ORGANISMS_LIST_FILE_NAME, ORGANISMS_FILE_NAME);
         // downloadPerOrganismLinks(workspace);
         return success;
@@ -322,9 +324,11 @@ public class KeggUpdater extends Updater<KeggDataSource> {
             for (String line : lines) {
                 String[] parts = org.apache.commons.lang3.StringUtils.split(line, '\t');
                 if (parts.length > 0) {
-                    ids.add(parts[0].replace("rn:", "").replace("md:", "").replace("gn:", ""));
+                    ids.add(parts[0].replace("rn:", "").replace("md:", "").replace("gn:", "").replace("path:", ""));
                 }
             }
+            int total = ids.size();
+            int processed = 0;
             try (java.io.FileWriter writer = new java.io.FileWriter(outputFilePath)) {
                 for (int i = 0; i < ids.size(); i += 10) {
                     int end = Math.min(i + 10, ids.size());
@@ -335,6 +339,10 @@ public class KeggUpdater extends Updater<KeggDataSource> {
                             writer.write(content);
                         }
                         Thread.sleep(200);
+                        processed += (end - i);
+                        if (processed % 500 == 0 || processed == total) {
+                            LOGGER.info("Processed {}/{} entries for {}", processed, total, listFileName);
+                        }
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -372,7 +380,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
                 UNIPROT_HSA_FILE_NAME, NCBI_PROTEINID_HSA_FILE_NAME, KO_HSA_FILE_NAME,
                 TAXONOMY_GENOME_FILE_NAME, PATHWAY_GENOME_FILE_NAME, PATHWAY_HSA_FILE_NAME,
                 GENES_PER_ORGANISM_FILE_NAME, PATHWAY_PER_ORGANISM_FILE_NAME,
-                REACTIONS_FILE_NAME, MODULES_FILE_NAME,
+                REACTIONS_FILE_NAME, MODULES_FILE_NAME, PATHWAYS_FILE_NAME,
                 ORGANISMS_FILE_NAME
         };
     }

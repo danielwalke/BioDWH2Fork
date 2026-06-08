@@ -84,6 +84,7 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         exportDiseases(graph);
         exportNetworks(graph);
         exportDrugGroups(graph);
+        exportPathways(graph);
         exportLinks(workspace, graph);
         return true;
     }
@@ -843,6 +844,17 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
             return graph.findNode(DRUG_LABEL, "id", id);
         if (id.startsWith("C"))
             return graph.findNode(COMPOUND_LABEL, "id", id);
+        if (id.startsWith("H"))
+            return graph.findNode(DISEASE_LABEL, "id", id);
+        if (id.contains("_M"))
+            return graph.findNode(MODULE_LABEL, "id", id.substring(id.indexOf("_") + 1));
+        if (id.startsWith("M"))
+            return graph.findNode(MODULE_LABEL, "id", id);
+        if (id.contains(":")) {
+            String[] parts = org.apache.commons.lang3.StringUtils.split(id, ":");
+            if ("hsa".equals(parts[0])) return graph.findNode(GENE_LABEL, "id", id);
+            if ("ko".equals(parts[0])) return graph.findNode(PROTEIN_LABEL, "id", parts[1]);
+        }
         return null;
     }
 
@@ -1104,5 +1116,69 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                 return node;
         }
         return null;
+    }
+
+    private void exportPathways(final Graph graph) {
+        if (dataSource.pathways == null) return;
+        for (final Pathway pathway : dataSource.pathways) {
+            exportPathway(graph, pathway);
+        }
+    }
+
+    private void exportPathway(final Graph graph, final Pathway pathway) {
+        final NodeBuilder builder = getNodeBuilderForKeggEntry(graph, pathway, PATHWAY_LABEL);
+        builder.withPropertyIfNotNull("description", pathway.description);
+        builder.withPropertyIfNotNull("pathway_map", pathway.pathwayMap);
+        if (pathway.classes.size() > 0)
+            builder.withProperty("classes", pathway.classes.toArray(new String[0]));
+        
+        final Node node;
+        Node existingNode = graph.findNode(PATHWAY_LABEL, "id", pathway.id);
+        if (existingNode != null) {
+            if (pathway.description != null) existingNode.setProperty("description", pathway.description);
+            if (pathway.pathwayMap != null) existingNode.setProperty("pathway_map", pathway.pathwayMap);
+            if (pathway.classes.size() > 0) existingNode.setProperty("classes", pathway.classes.toArray(new String[0]));
+            if (pathway.names.size() > 0) existingNode.setProperty("names", pathway.names.toArray(new String[0]));
+            if (pathway.tags.size() > 1) existingNode.setProperty("tags", pathway.tags.toArray(new String[0]));
+            graph.update(existingNode);
+            node = existingNode;
+        } else {
+            node = builder.build();
+        }
+
+        addAllReferencesForEntry(graph, pathway, node);
+
+        int moduleOrder = 1;
+        for (final NameIdsPair module : pathway.modules) {
+            final Node moduleNode = findEntry(graph, module.ids);
+            if (moduleNode != null) {
+                graph.addEdge(node, moduleNode, "ASSOCIATED_WITH_MODULE", "order", moduleOrder);
+            }
+            moduleOrder++;
+        }
+
+        for (final NameIdsPair disease : pathway.diseases) {
+            final Node diseaseNode = findEntry(graph, disease.ids);
+            if (diseaseNode != null)
+                graph.addEdge(node, diseaseNode, "ASSOCIATED_WITH_DISEASE");
+        }
+
+        for (final NameIdsPair drug : pathway.drugs) {
+            final Node drugNode = findEntry(graph, drug.ids);
+            if (drugNode != null)
+                graph.addEdge(node, drugNode, "ASSOCIATED_WITH_DRUG");
+        }
+        
+        for (final NameIdsPair gene : pathway.genes) {
+            final Node geneNode = findEntry(graph, gene.ids);
+            if (geneNode != null)
+                graph.addEdge(node, geneNode, "ASSOCIATED_WITH_GENE");
+        }
+        
+        for (final NameIdsPair compound : pathway.compounds) {
+            final Node compoundNode = findEntry(graph, compound.ids);
+            if (compoundNode != null)
+                graph.addEdge(node, compoundNode, "ASSOCIATED_WITH_COMPOUND");
+        }
     }
 }
