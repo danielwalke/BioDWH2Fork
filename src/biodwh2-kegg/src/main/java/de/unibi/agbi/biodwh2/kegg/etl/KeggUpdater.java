@@ -167,8 +167,8 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         
         downloadKeggEntries(workspace, REACTIONS_LIST_FILE_NAME, REACTIONS_FILE_NAME);
         downloadKeggEntries(workspace, MODULES_LIST_FILE_NAME, MODULES_FILE_NAME);
-        downloadKeggEntries(workspace, ORGANISMS_LIST_FILE_NAME, ORGANISMS_FILE_NAME);
-        downloadPerOrganismLinks(workspace);
+        // downloadKeggEntries(workspace, ORGANISMS_LIST_FILE_NAME, ORGANISMS_FILE_NAME);
+        // downloadPerOrganismLinks(workspace);
         return success;
     }
 
