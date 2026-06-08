@@ -71,11 +71,11 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         graph.addIndex(IndexDescription.forNode(REFERENCE_LABEL, "doi", IndexDescription.Type.UNIQUE));
         exportHumanGenesList(workspace, graph);
         exportCompoundsList(workspace, graph);
-        exportOrganisms(workspace, graph);
         exportReactionsList(workspace, graph);
         exportModulesList(workspace, graph);
         exportProteinsList(workspace, graph);
         exportPathwaysList(workspace, graph);
+        exportOrganisms(workspace, graph);
         exportEnzymesList(workspace, graph);
         exportBriteList(workspace, graph);
                 exportRClassList(workspace, graph);
