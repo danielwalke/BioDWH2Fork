@@ -8,6 +8,8 @@ import de.unibi.agbi.biodwh2.core.exceptions.UpdaterException;
 import de.unibi.agbi.biodwh2.core.model.Version;
 import de.unibi.agbi.biodwh2.core.net.AnonymousFTPClient;
 import de.unibi.agbi.biodwh2.kegg.KeggDataSource;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -16,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class KeggUpdater extends Updater<KeggDataSource> {
+    private static final Logger LOGGER = LogManager.getLogger(KeggUpdater.class);
     static final String DGROUP_FILE_NAME = "dgroup";
     static final String DRUG_FILE_NAME = "drug";
     static final String DISEASE_FILE_NAME = "disease";
@@ -136,40 +139,48 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         success = success && updateFile(workspace, dataSource, ftpClient, "drug/" + DRUG_FILE_NAME);
         success = success && updateFile(workspace, dataSource, ftpClient, "network/" + NETWORK_FILE_NAME);
         success = success && updateFile(workspace, dataSource, ftpClient, "network/" + VARIANT_FILE_NAME);
-        downloadFileAsBrowser(workspace, HUMAN_GENES_LIST_URL, HUMAN_GENES_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, COMPOUNDS_LIST_URL, COMPOUNDS_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, ORGANISMS_LIST_URL, ORGANISMS_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, REACTIONS_LIST_URL, REACTIONS_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, MODULES_LIST_URL, MODULES_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, ORTHOLOGY_LIST_URL, ORTHOLOGY_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, PATHWAYS_LIST_URL, PATHWAYS_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, ENZYMES_LIST_URL, ENZYMES_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, BRITE_LIST_URL, BRITE_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, RCLASS_LIST_URL, RCLASS_LIST_FILE_NAME);
-        downloadFileAsBrowser(workspace, REACTION_COMPOUND_URL, REACTION_COMPOUND_FILE_NAME);
-        downloadFileAsBrowser(workspace, REACTION_KO_URL, REACTION_KO_FILE_NAME);
-        downloadFileAsBrowser(workspace, MODULE_REACTION_URL, MODULE_REACTION_FILE_NAME);
-        downloadFileAsBrowser(workspace, MODULE_KO_URL, MODULE_KO_FILE_NAME);
-        downloadFileAsBrowser(workspace, MODULE_COMPOUND_URL, MODULE_COMPOUND_FILE_NAME);
-        downloadFileAsBrowser(workspace, PATHWAY_KO_URL, PATHWAY_KO_FILE_NAME);
-        downloadFileAsBrowser(workspace, PATHWAY_COMPOUND_URL, PATHWAY_COMPOUND_FILE_NAME);
-        downloadFileAsBrowser(workspace, PATHWAY_MODULE_URL, PATHWAY_MODULE_FILE_NAME);
-        downloadFileAsBrowser(workspace, DISEASE_DRUG_URL, DISEASE_DRUG_FILE_NAME);
-        downloadFileAsBrowser(workspace, DISEASE_HSA_URL, DISEASE_HSA_FILE_NAME);
-        downloadFileAsBrowser(workspace, REACTION_ENZYME_URL, REACTION_ENZYME_FILE_NAME);
-        downloadFileAsBrowser(workspace, UNIPROT_HSA_URL, UNIPROT_HSA_FILE_NAME);
-        downloadFileAsBrowser(workspace, NCBI_PROTEINID_HSA_URL, NCBI_PROTEINID_HSA_FILE_NAME);
-        downloadFileAsBrowser(workspace, KO_HSA_URL, KO_HSA_FILE_NAME);
-        downloadFileAsBrowser(workspace, PATHWAY_REACTION_URL, PATHWAY_REACTION_FILE_NAME);
-        downloadFileAsBrowser(workspace, TAXONOMY_GENOME_URL, TAXONOMY_GENOME_FILE_NAME);
-        downloadFileAsBrowser(workspace, PATHWAY_GENOME_URL, PATHWAY_GENOME_FILE_NAME);
-        downloadFileAsBrowser(workspace, PATHWAY_HSA_URL, PATHWAY_HSA_FILE_NAME);
-        
+        tryDownloadFileAsBrowser(workspace, HUMAN_GENES_LIST_URL, HUMAN_GENES_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, COMPOUNDS_LIST_URL, COMPOUNDS_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, ORGANISMS_LIST_URL, ORGANISMS_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, REACTIONS_LIST_URL, REACTIONS_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, MODULES_LIST_URL, MODULES_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, ORTHOLOGY_LIST_URL, ORTHOLOGY_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, PATHWAYS_LIST_URL, PATHWAYS_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, ENZYMES_LIST_URL, ENZYMES_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, BRITE_LIST_URL, BRITE_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, RCLASS_LIST_URL, RCLASS_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, REACTION_COMPOUND_URL, REACTION_COMPOUND_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, REACTION_KO_URL, REACTION_KO_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, MODULE_REACTION_URL, MODULE_REACTION_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, MODULE_KO_URL, MODULE_KO_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, MODULE_COMPOUND_URL, MODULE_COMPOUND_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, PATHWAY_KO_URL, PATHWAY_KO_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, PATHWAY_COMPOUND_URL, PATHWAY_COMPOUND_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, PATHWAY_MODULE_URL, PATHWAY_MODULE_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, DISEASE_DRUG_URL, DISEASE_DRUG_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, DISEASE_HSA_URL, DISEASE_HSA_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, REACTION_ENZYME_URL, REACTION_ENZYME_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, UNIPROT_HSA_URL, UNIPROT_HSA_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, NCBI_PROTEINID_HSA_URL, NCBI_PROTEINID_HSA_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, KO_HSA_URL, KO_HSA_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, PATHWAY_REACTION_URL, PATHWAY_REACTION_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, TAXONOMY_GENOME_URL, TAXONOMY_GENOME_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, PATHWAY_GENOME_URL, PATHWAY_GENOME_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, PATHWAY_HSA_URL, PATHWAY_HSA_FILE_NAME);
         downloadKeggEntries(workspace, REACTIONS_LIST_FILE_NAME, REACTIONS_FILE_NAME);
         downloadKeggEntries(workspace, MODULES_LIST_FILE_NAME, MODULES_FILE_NAME);
         // downloadKeggEntries(workspace, ORGANISMS_LIST_FILE_NAME, ORGANISMS_FILE_NAME);
         // downloadPerOrganismLinks(workspace);
         return success;
+    }
+
+    private void tryDownloadFileAsBrowser(final Workspace workspace, final String url, final String fileName) {
+        try {
+            downloadFileAsBrowser(workspace, url, fileName);
+        } catch (UpdaterException e) {
+            if (LOGGER.isWarnEnabled())
+                LOGGER.warn("Failed to download " + fileName + " from " + url, e);
+        }
     }
 
     /**
