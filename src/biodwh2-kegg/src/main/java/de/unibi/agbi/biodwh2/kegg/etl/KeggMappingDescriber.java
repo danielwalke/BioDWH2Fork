@@ -218,14 +218,8 @@ public class KeggMappingDescriber extends MappingDescriber {
                                       KeggGraphExporter.PROTEIN_LABEL, EdgeDirection.FORWARD),
                 new PathMapping().add(KeggGraphExporter.ORGANISM_LABEL, "CONTAINS_PATHWAY",
                                       KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD),
-                new PathMapping().add(KeggGraphExporter.GENOME_LABEL, "CONTAINS_PATHWAY",
-                                      KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD),
-                new PathMapping().add(KeggGraphExporter.ORGANISM_LABEL, "HAS_GENOME",
-                                      KeggGraphExporter.GENOME_LABEL, EdgeDirection.FORWARD),
                 new PathMapping().add(KeggGraphExporter.GENE_LABEL, "ASSOCIATED_WITH_PATHWAY",
-                                      KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD),
-                new PathMapping().add(KeggGraphExporter.GENOME_LABEL, "CONTAINS_GENE",
-                                      KeggGraphExporter.GENE_LABEL, EdgeDirection.FORWARD)
+                                      KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD)
         };
     }
 }

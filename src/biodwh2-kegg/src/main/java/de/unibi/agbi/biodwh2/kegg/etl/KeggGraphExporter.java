@@ -30,7 +30,6 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
     static final String GENE_LABEL = "Gene";
     static final String COMPOUND_LABEL = "Compound";
     static final String ORGANISM_LABEL = "Organism";
-    static final String GENOME_LABEL = "Genome";
     static final String REACTION_LABEL = "Reaction";
     static final String MODULE_LABEL = "Module";
     static final String PROTEIN_LABEL = "Protein";
@@ -60,7 +59,6 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         graph.addIndex(IndexDescription.forNode(DRUG_GROUP_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(COMPOUND_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(ORGANISM_LABEL, "id", IndexDescription.Type.UNIQUE));
-        graph.addIndex(IndexDescription.forNode(GENOME_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(REACTION_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(MODULE_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(PROTEIN_LABEL, "id", IndexDescription.Type.UNIQUE));
@@ -172,13 +170,6 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                 orgBuilder.withProperty("ncbi_taxid", keggToTaxid.get(organism));
             }
             Node organismNode = orgBuilder.build();
-
-            de.unibi.agbi.biodwh2.core.model.graph.NodeBuilder genomeBuilder = graph.buildNode().withLabel(GENOME_LABEL).withProperty("id", "gn:" + organism).withProperty("symbol", organism).withProperty("genome_id", organism);
-            if (keggToTaxid.containsKey(organism)) {
-                genomeBuilder.withProperty("ncbi_taxid", keggToTaxid.get(organism));
-            }
-            Node genomeNode = genomeBuilder.build();
-            graph.addEdge(organismNode, genomeNode, "HAS_GENOME");
 
             totalOrganisms++;
 
@@ -396,11 +387,13 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
      */
     private void exportGenesPerOrganism(final Workspace workspace, final Graph graph) {
         final Map<String, Long> symbolToGenomeNodeId = new HashMap<>();
+        /*
         for (final Node genome : graph.findNodes(GENOME_LABEL)) {
             final String symbol = genome.getProperty("symbol");
             if (symbol != null)
                 symbolToGenomeNodeId.put(symbol, genome.getId());
         }
+        */
         long geneNodes = 0;
         long genomeGeneEdges = 0;
         for (final String[] row : openTSV(workspace, KeggUpdater.GENES_PER_ORGANISM_FILE_NAME)) {
