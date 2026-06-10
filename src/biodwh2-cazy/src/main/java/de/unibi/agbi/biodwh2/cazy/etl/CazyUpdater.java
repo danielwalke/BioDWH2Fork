@@ -79,6 +79,7 @@ public class CazyUpdater extends Updater<CazyDataSource> {
     @Override
     protected boolean tryUpdateFiles(final Workspace workspace) throws UpdaterException {
         downloadCAZyData(workspace);
+        downloadTaxonMapping(workspace);
         scrapeCazyStructures(workspace);
         return true;
     }
@@ -88,6 +89,18 @@ public class CazyUpdater extends Updater<CazyDataSource> {
             downloadFileAsBrowser(workspace, DATA_URL, DATA_FILE_NAME);
         } catch (UpdaterException e) {
             throw new UpdaterException("Failed to download CAZy data", e);
+        }
+    }
+
+    private void downloadTaxonMapping(final Workspace workspace) throws UpdaterException {
+        final Path gzPath = dataSource.resolveSourceFilePath(workspace, "prot.accession2taxid.gz");
+        if (Files.exists(gzPath)) {
+            return;
+        }
+        try {
+            downloadFileAsBrowser(workspace, "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/accession2taxid/prot.accession2taxid.gz", "prot.accession2taxid.gz");
+        } catch (UpdaterException e) {
+            throw new UpdaterException("Failed to download NCBI taxon mapping", e);
         }
     }
 
@@ -260,6 +273,6 @@ public class CazyUpdater extends Updater<CazyDataSource> {
 
     @Override
     protected String[] expectedFileNames() {
-        return new String[]{DATA_FILE_NAME, STRUCTURES_FILE_NAME, "prot.accession2taxid"};
+        return new String[]{DATA_FILE_NAME, STRUCTURES_FILE_NAME, "prot.accession2taxid.gz"};
     }
 }
