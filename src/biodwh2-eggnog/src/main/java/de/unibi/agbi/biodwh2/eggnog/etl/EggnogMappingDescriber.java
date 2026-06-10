@@ -20,14 +20,6 @@ public class EggnogMappingDescriber extends MappingDescriber {
     private NodeMappingDescription[] describeProtein(final Node node) {
         final NodeMappingDescription description = new NodeMappingDescription(NodeMappingDescription.NodeType.PROTEIN);
         description.addIdentifier(IdentifierType.UNIPROT_KB, node.<String>getProperty("uniprot_id"));
-        
-        String[] eggnogGroups = node.getProperty("eggnog_groups");
-        if (eggnogGroups != null) {
-            for (String group : eggnogGroups) {
-                description.addIdentifier("EGGNOG", group);
-            }
-        }
-        
         return new NodeMappingDescription[]{description};
     }
 

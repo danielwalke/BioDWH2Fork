@@ -183,16 +183,22 @@ public class CazyGraphExporter extends GraphExporter<CazyDataSource> {
 
     private Map<String, Integer> loadNCBITaxonMappings(final Workspace workspace, final Set<String> genBankIds) {
         final Map<String, Integer> genbankToTaxonId = new HashMap<>();
-        final Path taxonMappingPath = dataSource.resolveSourceFilePath(workspace, "prot.accession2taxid");
+        Path taxonMappingPath = dataSource.resolveSourceFilePath(workspace, "prot.accession2taxid.gz");
+        boolean isGzip = true;
         if (!Files.exists(taxonMappingPath)) {
-            LOGGER.warn("prot.accession2taxid not found; skipping NCBI taxon ID mappings.");
-            return genbankToTaxonId;
+            taxonMappingPath = dataSource.resolveSourceFilePath(workspace, "prot.accession2taxid");
+            isGzip = false;
+            if (!Files.exists(taxonMappingPath)) {
+                LOGGER.warn("prot.accession2taxid[.gz] not found; skipping NCBI taxon ID mappings.");
+                return genbankToTaxonId;
+            }
         }
 
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Loading NCBI taxon mappings from " + taxonMappingPath.getFileName() + " for " + genBankIds.size() + " GenBank IDs...");
 
-        try (final BufferedReader reader = Files.newBufferedReader(taxonMappingPath, StandardCharsets.UTF_8)) {
+        try (final java.io.InputStream is = isGzip ? new java.util.zip.GZIPInputStream(Files.newInputStream(taxonMappingPath)) : Files.newInputStream(taxonMappingPath);
+             final BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(is, StandardCharsets.UTF_8))) {
             String line = reader.readLine(); // skip header
             int count = 0;
             while ((line = reader.readLine()) != null) {

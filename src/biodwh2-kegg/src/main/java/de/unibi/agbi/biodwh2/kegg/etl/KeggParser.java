@@ -56,6 +56,7 @@ public class KeggParser extends Parser<KeggDataSource> {
         dataSource.drugs = parseKeggFile(workspace, dataSource, Drug.class, KeggUpdater.DRUG_FILE_NAME);
         dataSource.diseases = parseKeggFile(workspace, dataSource, Disease.class, KeggUpdater.DISEASE_FILE_NAME);
         dataSource.networks = parseKeggFile(workspace, dataSource, Network.class, KeggUpdater.NETWORK_FILE_NAME);
+        dataSource.pathways = parseKeggFile(workspace, dataSource, Pathway.class, KeggUpdater.PATHWAYS_FILE_NAME);
         return true;
     }
 
@@ -79,7 +80,7 @@ public class KeggParser extends Parser<KeggDataSource> {
                 final String value = line.length() > 12 ? StringUtils.stripEnd(line.substring(12), null) : "";
                 if (!keyword.isEmpty())
                     chunk.add(new ChunkLine(keyword, value));
-                else
+                else if (!chunk.isEmpty())
                     chunk.get(chunk.size() - 1).value += '\n' + value;
             }
             reader.close();
@@ -130,6 +131,8 @@ public class KeggParser extends Parser<KeggDataSource> {
                         i = processDrugGroupLine(chunk, line, i, (DrugGroup) entry);
                     else if (entryClass == Network.class)
                         i = processNetworkGroupLine(chunk, line, i, (Network) entry);
+                    else if (entryClass == Pathway.class)
+                        i = processPathwayLine(chunk, line, i, (Pathway) entry);
                     break;
             }
         }
@@ -487,6 +490,52 @@ public class KeggParser extends Parser<KeggDataSource> {
         return i;
     }
 
+    private int processPathwayLine(final ChunkLine[] chunk, final ChunkLine line, int i, final Pathway entry) {
+        final boolean lineNotEmpty = line.value.trim().length() > 0;
+        switch (line.keyword) {
+            case "NAME":
+                entry.names.addAll(Arrays.asList(StringUtils.split(line.value, '\n')));
+                break;
+            case "DESCRIPTION":
+                if (lineNotEmpty)
+                    entry.description = line.value;
+                break;
+            case "CLASS":
+                if (lineNotEmpty)
+                    for (String category : StringUtils.split(line.value, ';'))
+                        entry.classes.add(category.trim());
+                break;
+            case "PATHWAY_MAP":
+                if (lineNotEmpty)
+                    entry.pathwayMap = line.value;
+                break;
+            case "MODULE":
+                if (lineNotEmpty)
+                    entry.modules.addAll(parseMultilineIdNamePairs(line));
+                break;
+            case "DISEASE":
+                if (lineNotEmpty)
+                    entry.diseases.addAll(parseMultilineIdNamePairs(line));
+                break;
+            case "DRUG":
+                if (lineNotEmpty)
+                    entry.drugs.addAll(parseMultilineIdNamePairs(line));
+                break;
+            case "GENE":
+                if (lineNotEmpty)
+                    entry.genes.addAll(parseMultilineIdNamePairs(line));
+                break;
+            case "COMPOUND":
+                if (lineNotEmpty)
+                    entry.compounds.addAll(parseMultilineIdNamePairs(line));
+                break;
+            default:
+                logUnknownKeyword("Pathway", line.keyword);
+                break;
+        }
+        return i;
+    }
+
     private static ParsedReference parseReference(final ChunkLine[] chunk, final int i, final ChunkLine line) {
         final ParsedReference parsedReference = new ParsedReference();
         final Reference reference = new Reference();
@@ -514,14 +563,16 @@ public class KeggParser extends Parser<KeggDataSource> {
                     reference.title = nextLine.value;
                     break;
                 case "  JOURNAL":
-                    final String[] parts = StringUtils.split(nextLine.value, '\n');
-                    reference.journal = parts[0];
-                    if (parts.length > 1) {
-                        for (int k = 1; k < parts.length; k++) {
-                            if (parts[k].startsWith("DOI:"))
-                                reference.doi = parts[k].substring(4).trim();
-                            else
-                                LOGGER.warn("Unknown journal line in: " + nextLine.value);
+                    final String[] parts = org.apache.commons.lang3.StringUtils.split(nextLine.value, '\n');
+                    if (parts.length > 0) {
+                        reference.journal = parts[0];
+                        if (parts.length > 1) {
+                            for (int k = 1; k < parts.length; k++) {
+                                if (parts[k].startsWith("DOI:"))
+                                    reference.doi = parts[k].substring(4).trim();
+                                else
+                                    LOGGER.warn("Unknown journal line in: " + nextLine.value);
+                            }
                         }
                     }
                     break;

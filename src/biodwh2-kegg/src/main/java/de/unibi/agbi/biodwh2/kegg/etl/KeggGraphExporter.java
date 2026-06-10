@@ -30,7 +30,6 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
     static final String GENE_LABEL = "Gene";
     static final String COMPOUND_LABEL = "Compound";
     static final String ORGANISM_LABEL = "Organism";
-    static final String GENOME_LABEL = "Genome";
     static final String REACTION_LABEL = "Reaction";
     static final String MODULE_LABEL = "Module";
     static final String PROTEIN_LABEL = "Protein";
@@ -60,7 +59,6 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         graph.addIndex(IndexDescription.forNode(DRUG_GROUP_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(COMPOUND_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(ORGANISM_LABEL, "id", IndexDescription.Type.UNIQUE));
-        graph.addIndex(IndexDescription.forNode(GENOME_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(REACTION_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(MODULE_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(PROTEIN_LABEL, "id", IndexDescription.Type.UNIQUE));
@@ -73,11 +71,11 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         graph.addIndex(IndexDescription.forNode(REFERENCE_LABEL, "doi", IndexDescription.Type.UNIQUE));
         exportHumanGenesList(workspace, graph);
         exportCompoundsList(workspace, graph);
-        exportOrganismsList(workspace, graph);
         exportReactionsList(workspace, graph);
         exportModulesList(workspace, graph);
         exportProteinsList(workspace, graph);
         exportPathwaysList(workspace, graph);
+        exportOrganisms(workspace, graph);
         exportEnzymesList(workspace, graph);
         exportBriteList(workspace, graph);
                 exportRClassList(workspace, graph);
@@ -86,6 +84,7 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         exportDiseases(graph);
         exportNetworks(graph);
         exportDrugGroups(graph);
+        exportPathways(graph);
         exportLinks(workspace, graph);
         return true;
     }
@@ -138,65 +137,56 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                               StringUtils.splitByWholeSeparator(row[1], "; "));
     }
 
-    private void exportOrganismsList(Workspace workspace, Graph graph) {
-        java.util.Map<String, String> keggToTaxid = new java.util.HashMap<>();
-        String organismsFilePath = dataSource.resolveSourceFilePath(workspace, KeggUpdater.ORGANISMS_FILE_NAME).toString();
-        if (new java.io.File(organismsFilePath).exists()) {
-            try {
-                java.util.List<String> lines = java.nio.file.Files.readAllLines(java.nio.file.Paths.get(organismsFilePath));
-                String currentOrganism = null;
-                for (String line : lines) {
-                    if (line.startsWith("ENTRY ")) {
-                        String[] parts = org.apache.commons.lang3.StringUtils.split(line, " 	");
-                        if (parts.length > 1) {
-                            currentOrganism = parts[1].trim();
-                            if (currentOrganism.startsWith("T")) {
-                                keggToTaxid.put(currentOrganism, "");
-                            }
-                        }
-                    } else if (line.startsWith("TAXONOMY    TAX:") && currentOrganism != null) {
-                        String taxid = line.substring("TAXONOMY    TAX:".length()).trim();
-                        int semiColon = taxid.indexOf('\t');
-                        if (semiColon != -1) taxid = taxid.substring(0, semiColon).trim();
-                        keggToTaxid.put(currentOrganism, "NCBITaxon:" + taxid);
-                        currentOrganism = null;
-                    } else if (line.startsWith("///")) {
-                        currentOrganism = null;
-                    }
-                }
-            } catch (java.io.IOException e) {}
+    private void exportOrganisms(Workspace workspace, Graph graph) {
+        final java.util.Map<String, String> keggToTaxid = new java.util.HashMap<>();
+        for (final String[] row : openTSV(workspace, KeggUpdater.TAXONOMY_GENOME_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                keggToTaxid.put(stripPrefix(row[0].trim()), "NCBITaxon:" + stripPrefix(row[1].trim()));
+            }
         }
 
-        for (final String[] row : openTSV(workspace, KeggUpdater.ORGANISMS_LIST_FILE_NAME)) {
-            if (row != null && row.length == 4) {
-                String scientificName = row[2].trim();
-                String organismId = row[0];
-                String ncbiTaxonProperty = keggToTaxid.get(organismId);
-                
-                final Node organismNode;
-                if (scientificName.endsWith(")")) {
-                    int commonNameStart = scientificName.lastIndexOf('(');
-                    String commonName = scientificName.substring(commonNameStart + 1, scientificName.length() - 1);
-                    scientificName = scientificName.substring(0, commonNameStart - 1).trim();
-                    de.unibi.agbi.biodwh2.core.model.graph.NodeBuilder builder = graph.buildNode().withLabel(ORGANISM_LABEL).withProperty("id", organismId).withProperty("symbol", row[1]).withProperty("name", scientificName).withProperty("common_name", commonName).withProperty("taxonomy", StringUtils.split(row[3], ';'));
-                    if (ncbiTaxonProperty != null && !ncbiTaxonProperty.isEmpty()) builder.withProperty("ncbi_taxid", ncbiTaxonProperty);
-                    organismNode = builder.build();
-                } else {
-                    de.unibi.agbi.biodwh2.core.model.graph.NodeBuilder builder = graph.buildNode().withLabel(ORGANISM_LABEL).withProperty("id", organismId).withProperty("symbol", row[1]).withProperty("name", scientificName).withProperty("taxonomy", StringUtils.split(row[3], ';'));
-                    if (ncbiTaxonProperty != null && !ncbiTaxonProperty.isEmpty()) builder.withProperty("ncbi_taxid", ncbiTaxonProperty);
-                    organismNode = builder.build();
-                }
-                // Create explicit Genome node and Organism-[HAS_GENOME]->Genome edge
-                final NodeBuilder genomeBuilder = graph.buildNode().withLabel(GENOME_LABEL)
-                        .withProperty("id", "gn:" + row[1])
-                        .withProperty("symbol", row[1])
-                        .withProperty("genome_id", organismId)
-                        .withProperty("name", scientificName);
-                if (ncbiTaxonProperty != null && !ncbiTaxonProperty.isEmpty())
-                    genomeBuilder.withProperty("ncbi_taxid", ncbiTaxonProperty);
-                final Node genomeNode = genomeBuilder.build();
-                graph.addEdge(organismNode, genomeNode, "HAS_GENOME");
+        final java.util.Map<String, java.util.List<String>> organismToPathways = new java.util.HashMap<>();
+        for (final String[] row : openTSV(workspace, KeggUpdater.PATHWAY_GENOME_FILE_NAME)) {
+            if (row != null && row.length == 2) {
+                final String organism = stripPrefix(row[0].trim());
+                final String pathwayKeggId = stripPrefix(row[1].trim());
+                final String pathwayNum = pathwayKeggId.replaceAll("[^0-9]", "");
+                organismToPathways.computeIfAbsent(organism, k -> new java.util.ArrayList<>()).add("map" + pathwayNum);
             }
+        }
+
+        java.util.Set<String> allOrganisms = new java.util.HashSet<>(keggToTaxid.keySet());
+        allOrganisms.addAll(organismToPathways.keySet());
+
+        final java.util.Map<String, Long> pathwayIdToNodeId = new java.util.HashMap<>();
+        for (final Node pathway : graph.findNodes(PATHWAY_LABEL)) {
+            pathwayIdToNodeId.put(pathway.getProperty("id"), pathway.getId());
+        }
+
+        long connectedPathways = 0;
+        long totalOrganisms = 0;
+        for (String organism : allOrganisms) {
+            de.unibi.agbi.biodwh2.core.model.graph.NodeBuilder orgBuilder = graph.buildNode().withLabel(ORGANISM_LABEL).withProperty("id", organism).withProperty("symbol", organism);
+            if (keggToTaxid.containsKey(organism)) {
+                orgBuilder.withProperty("ncbi_taxid", keggToTaxid.get(organism));
+            }
+            Node organismNode = orgBuilder.build();
+
+            totalOrganisms++;
+
+            if (organismToPathways.containsKey(organism)) {
+                for (String pathway : organismToPathways.get(organism)) {
+                    Long pathwayNodeId = pathwayIdToNodeId.get(pathway);
+                    if (pathwayNodeId != null) {
+                        graph.addEdge(organismNode.getId(), pathwayNodeId, "CONTAINS_PATHWAY");
+                        connectedPathways++;
+                    }
+                }
+            }
+        }
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("Exported " + totalOrganisms + " organisms.");
+            LOGGER.info("Organism→Pathway edges connected: " + connectedPathways);
         }
     }
 
@@ -386,10 +376,8 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         exportUniProtHsaMappings(workspace, graph);
         exportNcbiProteinIdMappings(workspace, graph);
         exportGeneProteinLinks(workspace, graph);
-        exportPathwayOrganismMappings(workspace, graph);
-        exportTaxonomyOrganismMappings(workspace, graph);
-        exportGenesPerOrganism(workspace, graph);
-        exportPathwayPerOrganismLinks(workspace, graph);
+        // exportGenesPerOrganism(workspace, graph);
+        // exportPathwayPerOrganismLinks(workspace, graph);
     }
 
     /**
@@ -400,11 +388,13 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
      */
     private void exportGenesPerOrganism(final Workspace workspace, final Graph graph) {
         final Map<String, Long> symbolToGenomeNodeId = new HashMap<>();
+        /*
         for (final Node genome : graph.findNodes(GENOME_LABEL)) {
             final String symbol = genome.getProperty("symbol");
             if (symbol != null)
                 symbolToGenomeNodeId.put(symbol, genome.getId());
         }
+        */
         long geneNodes = 0;
         long genomeGeneEdges = 0;
         for (final String[] row : openTSV(workspace, KeggUpdater.GENES_PER_ORGANISM_FILE_NAME)) {
@@ -456,21 +446,53 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         }
 
         long edgesCreated = 0;
+        final java.util.TreeMap<String, java.util.List<Long>> currentOrgGeneToPathways = new java.util.TreeMap<>();
+        String currentOrganism = null;
+
         for (final String[] row : openTSV(workspace, KeggUpdater.PATHWAY_PER_ORGANISM_FILE_NAME)) {
             if (row != null && row.length == 2) {
                 final String geneKeggId = row[0].trim();
                 final String pathwayKeggId = stripPrefix(row[1].trim());
                 final String pathwayNum = pathwayKeggId.replaceAll("[^0-9]", "");
 
-                final Node geneNode = graph.findNode(GENE_LABEL, "id", geneKeggId);
-                final Long pathwayNodeId = pathwayIdToNodeId.get("map" + pathwayNum);
+                final int colonIndex = geneKeggId.indexOf(':');
+                if (colonIndex > 0) {
+                    final String org = geneKeggId.substring(0, colonIndex);
+                    
+                    if (!org.equals(currentOrganism)) {
+                        for (final Map.Entry<String, java.util.List<Long>> entry : currentOrgGeneToPathways.entrySet()) {
+                            final Node geneNode = graph.findNode(GENE_LABEL, "id", entry.getKey());
+                            if (geneNode != null) {
+                                final Long geneNodeId = geneNode.getId();
+                                for (final Long pathwayNodeId : entry.getValue()) {
+                                    graph.addEdge(geneNodeId, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
+                                    edgesCreated++;
+                                }
+                            }
+                        }
+                        currentOrgGeneToPathways.clear();
+                        currentOrganism = org;
+                    }
+                }
 
-                if (geneNode != null && pathwayNodeId != null) {
-                    graph.addEdge(geneNode, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
+                final Long pathwayNodeId = pathwayIdToNodeId.get("map" + pathwayNum);
+                if (pathwayNodeId != null) {
+                    currentOrgGeneToPathways.computeIfAbsent(geneKeggId, k -> new ArrayList<>()).add(pathwayNodeId);
+                }
+            }
+        }
+        
+        for (final Map.Entry<String, java.util.List<Long>> entry : currentOrgGeneToPathways.entrySet()) {
+            final Node geneNode = graph.findNode(GENE_LABEL, "id", entry.getKey());
+            if (geneNode != null) {
+                final Long geneNodeId = geneNode.getId();
+                for (final Long pathwayNodeId : entry.getValue()) {
+                    graph.addEdge(geneNodeId, pathwayNodeId, "ASSOCIATED_WITH_PATHWAY");
                     edgesCreated++;
                 }
             }
         }
+        
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Gene→Pathway (all organisms) edges created: " + edgesCreated);
         }
@@ -674,92 +696,6 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         }
     }
 
-    /**
-     * Exports organism→pathway links from link/pathway/genome.
-     * Format: gn:hsa    path:hsa00010
-     * Maps organism symbol (hsa) to organism node ID (T01001).
-     */
-    private void exportPathwayOrganismMappings(final Workspace workspace, final Graph graph) {
-        final Map<String, Long> symbolToOrganismNodeId = new HashMap<>();
-        for (final Node organism : graph.findNodes(ORGANISM_LABEL)) {
-            final String symbol = organism.getProperty("symbol");
-            if (symbol != null)
-                symbolToOrganismNodeId.put(symbol, organism.getId());
-        }
-        final Map<String, Long> symbolToGenomeNodeId = new HashMap<>();
-        for (final Node genome : graph.findNodes(GENOME_LABEL)) {
-            final String symbol = genome.getProperty("symbol");
-            if (symbol != null)
-                symbolToGenomeNodeId.put(symbol, genome.getId());
-        }
-        final Map<String, Long> pathwayIdToNodeId = new HashMap<>();
-        for (final Node pathway : graph.findNodes(PATHWAY_LABEL))
-            pathwayIdToNodeId.put(pathway.getProperty("id"), pathway.getId());
-
-        for (final String[] row : openTSV(workspace, KeggUpdater.PATHWAY_GENOME_FILE_NAME)) {
-            if (row != null && row.length == 2) {
-                final String organismSymbol = stripPrefix(row[0].trim());
-                final String pathwayKeggId = stripPrefix(row[1].trim());
-                final String pathwayNum = pathwayKeggId.replaceAll("[^0-9]", "");
-                final Long organismNodeId = symbolToOrganismNodeId.get(organismSymbol);
-                final Long genomeNodeId = symbolToGenomeNodeId.get(organismSymbol);
-                final Long pathwayNodeId = pathwayIdToNodeId.get("map" + pathwayNum);
-                if (pathwayNodeId == null)
-                    continue;
-                // Explicit edge from Genome to Pathway (verifiable, sourced from link/pathway/genome)
-                if (genomeNodeId != null)
-                    graph.addEdge(genomeNodeId, pathwayNodeId, "CONTAINS_PATHWAY");
-                // Backward-compatible inferred edge from Organism to Pathway
-                if (organismNodeId != null)
-                    graph.addEdge(organismNodeId, pathwayNodeId, "CONTAINS_PATHWAY");
-            }
-        }
-    }
-
-    /**
-     * Exports taxonomy→genome links from link/taxonomy/genome.
-     * Format: gn:hsa    taxid:9606
-     * Maps organism symbol to node ID, stores taxonomy as property for ontology matching.
-     */
-    private void exportTaxonomyOrganismMappings(final Workspace workspace, final Graph graph) {
-        final Map<String, Node> symbolToOrganismNode = new HashMap<>();
-        for (final Node organism : graph.findNodes(ORGANISM_LABEL)) {
-            final String symbol = organism.getProperty("symbol");
-            if (symbol != null)
-                symbolToOrganismNode.put(symbol, organism);
-        }
-        final Map<String, Node> symbolToGenomeNode = new HashMap<>();
-        for (final Node genome : graph.findNodes(GENOME_LABEL)) {
-            final String symbol = genome.getProperty("symbol");
-            if (symbol != null)
-                symbolToGenomeNode.put(symbol, genome);
-        }
-
-        for (final String[] row : openTSV(workspace, KeggUpdater.TAXONOMY_GENOME_FILE_NAME)) {
-            if (row != null && row.length == 2) {
-                final String organismSymbol = stripPrefix(row[0].trim());
-                final String taxonomyId = stripPrefix(row[1].trim());
-                final String ncbiTaxid = "NCBITaxon:" + taxonomyId;
-                final Node organismNode = symbolToOrganismNode.get(organismSymbol);
-                if (organismNode != null) {
-                    final String existingTaxid = organismNode.getProperty("ncbi_taxid");
-                    if (existingTaxid == null) {
-                        organismNode.setProperty("ncbi_taxid", ncbiTaxid);
-                        graph.update(organismNode);
-                    }
-                }
-                final Node genomeNode = symbolToGenomeNode.get(organismSymbol);
-                if (genomeNode != null) {
-                    final String existingTaxid = genomeNode.getProperty("ncbi_taxid");
-                    if (existingTaxid == null) {
-                        genomeNode.setProperty("ncbi_taxid", ncbiTaxid);
-                        graph.update(genomeNode);
-                    }
-                }
-            }
-        }
-    }
-
     private void exportDrugs(final Graph graph) {
         for (final Drug drug : dataSource.drugs)
             exportDrug(graph, drug);
@@ -908,6 +844,17 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
             return graph.findNode(DRUG_LABEL, "id", id);
         if (id.startsWith("C"))
             return graph.findNode(COMPOUND_LABEL, "id", id);
+        if (id.startsWith("H"))
+            return graph.findNode(DISEASE_LABEL, "id", id);
+        if (id.contains("_M"))
+            return graph.findNode(MODULE_LABEL, "id", id.substring(id.indexOf("_") + 1));
+        if (id.startsWith("M"))
+            return graph.findNode(MODULE_LABEL, "id", id);
+        if (id.contains(":")) {
+            String[] parts = org.apache.commons.lang3.StringUtils.split(id, ":");
+            if ("hsa".equals(parts[0])) return graph.findNode(GENE_LABEL, "id", id);
+            if ("ko".equals(parts[0])) return graph.findNode(PROTEIN_LABEL, "id", parts[1]);
+        }
         return null;
     }
 
@@ -1169,5 +1116,69 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                 return node;
         }
         return null;
+    }
+
+    private void exportPathways(final Graph graph) {
+        if (dataSource.pathways == null) return;
+        for (final Pathway pathway : dataSource.pathways) {
+            exportPathway(graph, pathway);
+        }
+    }
+
+    private void exportPathway(final Graph graph, final Pathway pathway) {
+        final NodeBuilder builder = getNodeBuilderForKeggEntry(graph, pathway, PATHWAY_LABEL);
+        builder.withPropertyIfNotNull("description", pathway.description);
+        builder.withPropertyIfNotNull("pathway_map", pathway.pathwayMap);
+        if (pathway.classes.size() > 0)
+            builder.withProperty("classes", pathway.classes.toArray(new String[0]));
+        
+        final Node node;
+        Node existingNode = graph.findNode(PATHWAY_LABEL, "id", pathway.id);
+        if (existingNode != null) {
+            if (pathway.description != null) existingNode.setProperty("description", pathway.description);
+            if (pathway.pathwayMap != null) existingNode.setProperty("pathway_map", pathway.pathwayMap);
+            if (pathway.classes.size() > 0) existingNode.setProperty("classes", pathway.classes.toArray(new String[0]));
+            if (pathway.names.size() > 0) existingNode.setProperty("names", pathway.names.toArray(new String[0]));
+            if (pathway.tags.size() > 1) existingNode.setProperty("tags", pathway.tags.toArray(new String[0]));
+            graph.update(existingNode);
+            node = existingNode;
+        } else {
+            node = builder.build();
+        }
+
+        addAllReferencesForEntry(graph, pathway, node);
+
+        int moduleOrder = 1;
+        for (final NameIdsPair module : pathway.modules) {
+            final Node moduleNode = findEntry(graph, module.ids);
+            if (moduleNode != null) {
+                graph.addEdge(node, moduleNode, "ASSOCIATED_WITH_MODULE", "order", moduleOrder);
+            }
+            moduleOrder++;
+        }
+
+        for (final NameIdsPair disease : pathway.diseases) {
+            final Node diseaseNode = findEntry(graph, disease.ids);
+            if (diseaseNode != null)
+                graph.addEdge(node, diseaseNode, "ASSOCIATED_WITH_DISEASE");
+        }
+
+        for (final NameIdsPair drug : pathway.drugs) {
+            final Node drugNode = findEntry(graph, drug.ids);
+            if (drugNode != null)
+                graph.addEdge(node, drugNode, "ASSOCIATED_WITH_DRUG");
+        }
+        
+        for (final NameIdsPair gene : pathway.genes) {
+            final Node geneNode = findEntry(graph, gene.ids);
+            if (geneNode != null)
+                graph.addEdge(node, geneNode, "ASSOCIATED_WITH_GENE");
+        }
+        
+        for (final NameIdsPair compound : pathway.compounds) {
+            final Node compoundNode = findEntry(graph, compound.ids);
+            if (compoundNode != null)
+                graph.addEdge(node, compoundNode, "ASSOCIATED_WITH_COMPOUND");
+        }
     }
 }

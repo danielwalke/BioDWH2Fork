@@ -20,6 +20,7 @@ public class KeggDataSource extends DataSource {
     public List<Drug> drugs;
     public List<Network> networks;
     public List<Variant> variants;
+    public List<Pathway> pathways;
 
     @Override
     public String getId() {
@@ -63,5 +64,6 @@ public class KeggDataSource extends DataSource {
         drugs = null;
         networks = null;
         variants = null;
+        pathways = null;
     }
 }

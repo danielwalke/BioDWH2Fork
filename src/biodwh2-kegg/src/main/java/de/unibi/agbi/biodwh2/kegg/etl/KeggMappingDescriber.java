@@ -199,11 +199,13 @@ public class KeggMappingDescriber extends MappingDescriber {
         if (edges.length == 1) {
             if (edges[0].getLabel().endsWith(KeggGraphExporter.TARGETS_LABEL))
                 return new PathMappingDescription(PathMappingDescription.EdgeType.TARGETS);
-            if (edges[0].getLabel().equals("CONTAINS_PATHWAY"))
+            if (edges[0].getLabel().endsWith("CONTAINS_PATHWAY"))
                 return new PathMappingDescription(PathMappingDescription.EdgeType.ASSOCIATED_WITH);
-            if (edges[0].getLabel().equals("ASSOCIATED_WITH_PATHWAY"))
+            if (edges[0].getLabel().endsWith("ASSOCIATED_WITH_PATHWAY"))
                 return new PathMappingDescription(PathMappingDescription.EdgeType.ASSOCIATED_WITH);
-            if (edges[0].getLabel().equals("CONTAINS_GENE"))
+            if (edges[0].getLabel().endsWith("ASSOCIATED_WITH_MODULE"))
+                return new PathMappingDescription(PathMappingDescription.EdgeType.ASSOCIATED_WITH);
+            if (edges[0].getLabel().endsWith("CONTAINS_GENE"))
                 return new PathMappingDescription(PathMappingDescription.EdgeType.ASSOCIATED_WITH);
         }
         return null;
@@ -218,14 +220,10 @@ public class KeggMappingDescriber extends MappingDescriber {
                                       KeggGraphExporter.PROTEIN_LABEL, EdgeDirection.FORWARD),
                 new PathMapping().add(KeggGraphExporter.ORGANISM_LABEL, "CONTAINS_PATHWAY",
                                       KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD),
-                new PathMapping().add(KeggGraphExporter.GENOME_LABEL, "CONTAINS_PATHWAY",
-                                      KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD),
-                new PathMapping().add(KeggGraphExporter.ORGANISM_LABEL, "HAS_GENOME",
-                                      KeggGraphExporter.GENOME_LABEL, EdgeDirection.FORWARD),
                 new PathMapping().add(KeggGraphExporter.GENE_LABEL, "ASSOCIATED_WITH_PATHWAY",
                                       KeggGraphExporter.PATHWAY_LABEL, EdgeDirection.FORWARD),
-                new PathMapping().add(KeggGraphExporter.GENOME_LABEL, "CONTAINS_GENE",
-                                      KeggGraphExporter.GENE_LABEL, EdgeDirection.FORWARD)
+                new PathMapping().add(KeggGraphExporter.PATHWAY_LABEL, "ASSOCIATED_WITH_MODULE",
+                                      KeggGraphExporter.MODULE_LABEL, EdgeDirection.FORWARD)
         };
     }
 }
