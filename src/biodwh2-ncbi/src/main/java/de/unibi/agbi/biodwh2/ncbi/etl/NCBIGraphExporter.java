@@ -29,10 +29,11 @@ import de.unibi.agbi.biodwh2.ncbi.NCBIDataSource;
 // import de.unibi.agbi.biodwh2.ncbi.model.ProteinRecord;
 import de.unibi.agbi.biodwh2.ncbi.parser.NCBITaxonParser;
 // import de.unibi.agbi.biodwh2.ncbi.parser.NCBIProteinParser;
-import de.unibi.agbi.biodwh2.core.model.TimeBottleNecks;
+//import de.unibi.agbi.biodwh2.core.model.TimeBottleNecks;
  
 public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
     private static final Logger LOGGER = LogManager.getLogger(NCBIGraphExporter.class);
+    static final String TAXON_LABEL= "Taxon";
  
     // private Map<Long, Long> geneIdNodeIdMap;
     // private Map<String, Long> proteinIdNodeIdMap;
@@ -49,7 +50,7 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
  
     @Override
     protected boolean exportGraph(final Workspace workspace, final Graph graph) throws ExporterException {
-        graph.addIndex(IndexDescription.forNode("Taxon", "id", IndexDescription.Type.UNIQUE));
+        graph.addIndex(IndexDescription.forNode(TAXON_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
         // graph.addIndex(IndexDescription.forNode("Gene", "id", IndexDescription.Type.UNIQUE));
         // graph.addIndex(IndexDescription.forNode("Protein", "id", IndexDescription.Type.UNIQUE));
         // graph.addIndex(IndexDescription.forNode("Accession", "protein_accession.version",
@@ -60,9 +61,9 @@ public class NCBIGraphExporter extends GraphExporter<NCBIDataSource> {
         // proteinIdNodeIdMap = new HashMap<>();
  
         try {
-            long start = System.currentTimeMillis();
+            // long start = System.currentTimeMillis();
             exportTaxonDatabase(workspace, dataSource, graph);
-            LOGGER.info("Exported TaxonDatabase in {}", TimeBottleNecks.formatElapsed(System.currentTimeMillis() - start));
+            // LOGGER.info("Exported TaxonDatabase in {}", TimeBottleNecks.formatElapsed(System.currentTimeMillis() - start));
  
             // start = System.currentTimeMillis();
             // exportGeneDatabase(workspace, dataSource, graph);
