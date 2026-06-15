@@ -46,7 +46,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String BRITE_LIST_FILE_NAME = "brite_list.tsv";
     private static final String GLYCAN_LIST_URL = "https://rest.kegg.jp/list/glycan";
     static final String GLYCAN_LIST_FILE_NAME = "glycan_list.tsv";
-    private static final String RCLASS_LIST_URL = "https://rest.kegg.jp/list/rclass";
+    private static final String RCLASS_LIST_URL = "https://rest.kegg.jp/list/reaction";
     static final String RCLASS_LIST_FILE_NAME = "rclass_list.tsv";
 
     private static final String REACTION_COMPOUND_URL = "https://rest.kegg.jp/link/reaction/compound";
