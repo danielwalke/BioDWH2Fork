@@ -5,6 +5,7 @@
 setup a remote forward over local port to fetch data via local internet connection
 RemoteForward 127.0.0.1:1080
 java -DsocksProxyHost=127.0.0.1 -DsocksProxyPort=1080 -Djava.net.preferIPv4Stack=true -jar ./BioDWH2Fork/src/biodwh2-main/target/BioDWH2-v0.6.8d.jar --update workspaces/test
+keep one ssh window open in the backgrpound logged into the remote server
 
 # BioDWH2
 BioDWH2 is an easy-to-use, automated, graph-based data warehouse and mapping tool for bioinformatics and medical informatics. Whether you need a data warehouse for running research analyses or information systems, BioDWH2 can support you in setting things up.
