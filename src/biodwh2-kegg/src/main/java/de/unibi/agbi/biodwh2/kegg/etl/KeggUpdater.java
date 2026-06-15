@@ -29,7 +29,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String HUMAN_GENES_LIST_FILE_NAME = "human_genes_list.tsv";
     private static final String COMPOUNDS_LIST_URL = "https://rest.kegg.jp/list/compound";
     static final String COMPOUNDS_LIST_FILE_NAME = "compounds_list.tsv";
-    private static final String ORGANISMS_LIST_URL = "https://rest.kegg.jp/list/organism";
+    private static final String ORGANISMS_LIST_URL = "https://rest.kegg.jp/list/genome";
     static final String ORGANISMS_LIST_FILE_NAME = "organisms_list.tsv";
 
     private static final String REACTIONS_LIST_URL = "https://rest.kegg.jp/list/reaction";
