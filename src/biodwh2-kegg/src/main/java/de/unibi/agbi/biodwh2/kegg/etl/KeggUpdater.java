@@ -29,7 +29,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String HUMAN_GENES_LIST_FILE_NAME = "human_genes_list.tsv";
     private static final String COMPOUNDS_LIST_URL = "https://rest.kegg.jp/list/compound";
     static final String COMPOUNDS_LIST_FILE_NAME = "compounds_list.tsv";
-    private static final String ORGANISMS_LIST_URL = "https://rest.kegg.jp/list/organism";
+    private static final String ORGANISMS_LIST_URL = "https://rest.kegg.jp/list/genome";
     static final String ORGANISMS_LIST_FILE_NAME = "organisms_list.tsv";
 
     private static final String REACTIONS_LIST_URL = "https://rest.kegg.jp/list/reaction";
@@ -46,7 +46,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String BRITE_LIST_FILE_NAME = "brite_list.tsv";
     private static final String GLYCAN_LIST_URL = "https://rest.kegg.jp/list/glycan";
     static final String GLYCAN_LIST_FILE_NAME = "glycan_list.tsv";
-    private static final String RCLASS_LIST_URL = "https://rest.kegg.jp/list/rclass";
+    private static final String RCLASS_LIST_URL = "https://rest.kegg.jp/list/reaction";
     static final String RCLASS_LIST_FILE_NAME = "rclass_list.tsv";
 
     private static final String REACTION_COMPOUND_URL = "https://rest.kegg.jp/link/reaction/compound";
