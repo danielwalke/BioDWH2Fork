@@ -41,18 +41,42 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
     }
 
     @Override
-    protected boolean exportGraph(final Workspace workspace, final Graph graph) throws ExporterException {
+    protected boolean exportGraph(final Workspace workspace, final Graph graph)
+            throws ExporterException {
+
         dbReferenceCitationNodeIdMap.clear();
-        graph.addIndex(IndexDescription.forNode(ORGANISM_LABEL, ID_KEY, IndexDescription.Type.UNIQUE));
-        final File filePath = dataSource.resolveSourceFilePath(workspace, UniProtUpdater.SPROT_FILE_NAME).toFile();
-        if (!filePath.exists())
-            throw new ExporterException("Failed to parse the file '" + UniProtUpdater.SPROT_FILE_NAME + "'");
+
+        graph.addIndex(IndexDescription.forNode(
+            ORGANISM_LABEL,
+            ID_KEY,
+            IndexDescription.Type.UNIQUE
+        ));
+
+        exportUniProtFile(workspace, graph, UniProtUpdater.TREMBL_FILE_NAME);
+        exportUniProtFile(workspace, graph, UniProtUpdater.SPROT_FILE_NAME);
+        
+
+        return true;
+    }
+
+    private void exportUniProtFile(
+            final Workspace workspace,
+            final Graph graph,
+            final String fileName
+    ) throws ExporterException {
+        LOGGER.info("Starting UniProt XML export for '{}'", fileName);
+
+        final File filePath = dataSource.resolveSourceFilePath(workspace, fileName).toFile();
+
+        if (!filePath.exists()) {
+            throw new ExporterException("Failed to parse the file '" + fileName + "'");
+        }
+
         try (final GZIPInputStream stream = FileUtils.openGzip(filePath.toString())) {
-            FileUtils.streamXmlList(stream, Entry.class, (protein -> exportEntry(graph, protein)));
+            FileUtils.streamXmlList(stream, Entry.class, entry -> exportEntry(graph, entry));
         } catch (IOException | XMLStreamException e) {
             throw new ExporterFormatException(e);
         }
-        return true;
     }
 
     private void exportEntry(final Graph graph, final Entry entry) throws ExporterException {
@@ -81,10 +105,13 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
             builder.withProperty("keywords", entry.keyword.stream().map((k) -> k.value).toArray(String[]::new));
             builder.withProperty("keyword_ids", entry.keyword.stream().map((k) -> k.id).toArray(String[]::new));
             // TODO: evidence
+
+            /*
             for (final Keyword keyword : entry.keyword)
-                if (keyword.evidence != null && !keyword.evidence.isEmpty())
+                if (keyword.evidence != null && !keyword.evidence.isEmpty())   
                     LOGGER.warn("Evidence for keyword '{}' ({}) not exported", keyword.value, keyword.id);
-        }
+            */
+        } 
         if (entry.protein != null) {
             if (entry.protein.recommendedName != null) {
                 final var recommendedName = entry.protein.recommendedName;
@@ -123,17 +150,23 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
             builder.withProperty("db_references", dbReferences);
         }
         final Node node = builder.build();
+
+        /*
         if (entry.gene != null) {
             for (final Gene gene : entry.gene) {
                 // TODO
             }
         }
-        if (entry.geneLocation != null) {
+        
+            // can be used to map to NCBI gene simbol 
+        if (entry.geneLocation != null) {    
             for (final GeneLocation location : entry.geneLocation) {
                 // TODO: in swiss-prot human only type is ever set and always "mitochondrion"
                 // LOGGER.info(location.type + ", " + location.evidence + ", " + location.name);
             }
         }
+        */
+
         final Map<Integer, Long> referenceKeyNodeIdMap = new HashMap<>();
         for (final Reference reference : entry.reference) {
             final String[] scopes = reference.scope != null ? reference.scope.toArray(new String[0]) : new String[0];
@@ -249,10 +282,12 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         final long nodeId = builder.build().getId();
         for (final String reference : dbReferences) {
             final Long existingNodeId = dbReferenceCitationNodeIdMap.get(reference);
+            /*
             if (existingNodeId != null && existingNodeId != nodeId) {
                 LOGGER.warn("DBReference '{}' already exists for node id {}, now found in node id {}", reference,
                             existingNodeId, nodeId);
             }
+            */
             dbReferenceCitationNodeIdMap.put(reference, nodeId);
         }
         return nodeId;
@@ -269,3 +304,4 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         return names.toArray(new String[0]);
     }
 }
+
