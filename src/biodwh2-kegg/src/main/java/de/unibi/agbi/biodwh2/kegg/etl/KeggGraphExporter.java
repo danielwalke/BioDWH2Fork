@@ -78,7 +78,8 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         exportOrganisms(workspace, graph);
         exportEnzymesList(workspace, graph);
         exportBriteList(workspace, graph);
-                exportRClassList(workspace, graph);
+        exportReactionRClassLinks(workspace, graph);
+        exportRClassDetails(workspace, graph);
         exportDrugs(graph);
         exportVariants(graph);
         exportDiseases(graph);
@@ -355,10 +356,122 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                 graph.addNode(GLYCAN_LABEL, "id", row[0].trim(), "name", row[1].trim());
     }
 
-    private void exportRClassList(final Workspace workspace, final Graph graph) {
-        for (final String[] row : openTSV(workspace, KeggUpdater.RCLASS_LIST_FILE_NAME))
-            if (row != null && row.length >= 2)
-                graph.addNode(RCLASS_LABEL, "id", row[0].trim(), "name", row[1].trim());
+    private void exportReactionRClassLinks(final Workspace workspace, final Graph graph) {
+        for (final String[] row : openTSV(workspace, KeggUpdater.REACTION_RCLASS_FILE_NAME)) {
+            if (row != null && row.length >= 2) {
+                final String reactionId = stripPrefix(row[0].trim());
+                final String rClassId = stripPrefix(row[1].trim());
+
+                Node rClassNode = graph.findNode(RCLASS_LABEL, "id", rClassId);
+                if (rClassNode == null) {
+                    rClassNode = graph.addNode(RCLASS_LABEL, "id", rClassId);
+                }
+
+                final Node reactionNode = graph.findNode(REACTION_LABEL, "id", reactionId);
+                if (reactionNode != null && rClassNode != null) {
+                    graph.addEdge(reactionNode, rClassNode, "ASSOCIATED_WITH_RCLASS");
+                }
+            }
+        }
+    }
+
+    private void exportRClassDetails(final Workspace workspace, final Graph graph) {
+        final String filePath = dataSource.resolveSourceFilePath(workspace, KeggUpdater.RCLASSES_FILE_NAME).toString();
+        if (!new java.io.File(filePath).exists())
+            return;
+        try {
+            java.util.List<String> lines = java.nio.file.Files.readAllLines(java.nio.file.Paths.get(filePath));
+            String currentRClass = null;
+            java.util.List<String> definition = new java.util.ArrayList<>();
+            java.util.List<String> rpairs = new java.util.ArrayList<>();
+            java.util.List<String> reactions = new java.util.ArrayList<>();
+            java.util.List<String> enzymes = new java.util.ArrayList<>();
+            java.util.List<String> pathways = new java.util.ArrayList<>();
+            java.util.List<String> rmodules = new java.util.ArrayList<>();
+            java.util.List<String> orthologies = new java.util.ArrayList<>();
+            String currentKey = null;
+
+            for (String line : lines) {
+                if (line.startsWith("ENTRY ")) {
+                    String[] parts = org.apache.commons.lang3.StringUtils.split(line, " \t");
+                    if (parts.length > 1) {
+                        currentRClass = parts[1];
+                    }
+                    definition.clear();
+                    rpairs.clear();
+                    reactions.clear();
+                    enzymes.clear();
+                    pathways.clear();
+                    rmodules.clear();
+                    orthologies.clear();
+                    currentKey = null;
+                } else if (line.startsWith("DEFINITION ")) {
+                    currentKey = "DEFINITION";
+                    definition.add(line.substring(12).trim());
+                } else if (line.startsWith("RPAIR ")) {
+                    currentKey = "RPAIR";
+                    rpairs.addAll(java.util.Arrays.asList(org.apache.commons.lang3.StringUtils.split(line.substring(12).trim(), " \t")));
+                } else if (line.startsWith("REACTION ")) {
+                    currentKey = "REACTION";
+                    reactions.addAll(java.util.Arrays.asList(org.apache.commons.lang3.StringUtils.split(line.substring(12).trim(), " \t")));
+                } else if (line.startsWith("ENZYME ")) {
+                    currentKey = "ENZYME";
+                    enzymes.addAll(java.util.Arrays.asList(org.apache.commons.lang3.StringUtils.split(line.substring(12).trim(), " \t")));
+                } else if (line.startsWith("PATHWAY ")) {
+                    currentKey = "PATHWAY";
+                    pathways.add(line.substring(12).trim());
+                } else if (line.startsWith("RMODULE ")) {
+                    currentKey = "RMODULE";
+                    rmodules.add(line.substring(12).trim());
+                } else if (line.startsWith("ORTHOLOGY ")) {
+                    currentKey = "ORTHOLOGY";
+                    orthologies.add(line.substring(12).trim());
+                } else if (line.startsWith("            ") && currentKey != null) {
+                    if ("DEFINITION".equals(currentKey)) {
+                        definition.add(line.trim());
+                    } else if ("RPAIR".equals(currentKey)) {
+                        rpairs.addAll(java.util.Arrays.asList(org.apache.commons.lang3.StringUtils.split(line.trim(), " \t")));
+                    } else if ("REACTION".equals(currentKey)) {
+                        reactions.addAll(java.util.Arrays.asList(org.apache.commons.lang3.StringUtils.split(line.trim(), " \t")));
+                    } else if ("ENZYME".equals(currentKey)) {
+                        enzymes.addAll(java.util.Arrays.asList(org.apache.commons.lang3.StringUtils.split(line.trim(), " \t")));
+                    } else if ("PATHWAY".equals(currentKey)) {
+                        pathways.add(line.trim());
+                    } else if ("RMODULE".equals(currentKey)) {
+                        rmodules.add(line.trim());
+                    } else if ("ORTHOLOGY".equals(currentKey)) {
+                        orthologies.add(line.trim());
+                    }
+                } else if (line.startsWith("///") && currentRClass != null) {
+                    Node rClassNode = graph.findNode(RCLASS_LABEL, "id", currentRClass);
+                    if (rClassNode == null) {
+                        rClassNode = graph.addNode(RCLASS_LABEL, "id", currentRClass);
+                    }
+                    if (!definition.isEmpty())
+                        rClassNode.setProperty("definition", String.join("\n", definition));
+                    if (!rpairs.isEmpty())
+                        rClassNode.setProperty("rpairs", rpairs.toArray(new String[0]));
+                    if (!reactions.isEmpty())
+                        rClassNode.setProperty("reactions", reactions.toArray(new String[0]));
+                    if (!enzymes.isEmpty())
+                        rClassNode.setProperty("enzymes", enzymes.toArray(new String[0]));
+                    if (!pathways.isEmpty())
+                        rClassNode.setProperty("pathways", pathways.toArray(new String[0]));
+                    if (!rmodules.isEmpty())
+                        rClassNode.setProperty("rmodules", rmodules.toArray(new String[0]));
+                    if (!orthologies.isEmpty())
+                        rClassNode.setProperty("orthologies", orthologies.toArray(new String[0]));
+                    graph.update(rClassNode);
+                    
+                    currentRClass = null;
+                    currentKey = null;
+                } else if (!line.startsWith(" ") && !line.startsWith("///")) {
+                    currentKey = null;
+                }
+            }
+        } catch (java.io.IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private void exportLinks(Workspace workspace, Graph graph) {

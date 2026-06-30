@@ -46,8 +46,8 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String BRITE_LIST_FILE_NAME = "brite_list.tsv";
     private static final String GLYCAN_LIST_URL = "https://rest.kegg.jp/list/glycan";
     static final String GLYCAN_LIST_FILE_NAME = "glycan_list.tsv";
-    private static final String RCLASS_LIST_URL = "https://rest.kegg.jp/list/reaction";
-    static final String RCLASS_LIST_FILE_NAME = "rclass_list.tsv";
+    private static final String REACTION_RCLASS_URL = "https://rest.kegg.jp/link/rclass/reaction";
+    static final String REACTION_RCLASS_FILE_NAME = "reaction_rclass.tsv";
 
     private static final String REACTION_COMPOUND_URL = "https://rest.kegg.jp/link/reaction/compound";
     static final String REACTION_COMPOUND_FILE_NAME = "reaction_compound.tsv";
@@ -94,6 +94,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String REACTIONS_FILE_NAME = "reactions.txt";
     static final String MODULES_FILE_NAME = "modules.txt";
     static final String PATHWAYS_FILE_NAME = "pathways.txt";
+    static final String RCLASSES_FILE_NAME = "rclasses.txt";
     static final String ORGANISMS_FILE_NAME = "organisms.txt";
 
     public KeggUpdater(KeggDataSource dataSource) {
@@ -149,7 +150,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         tryDownloadFileAsBrowser(workspace, PATHWAYS_LIST_URL, PATHWAYS_LIST_FILE_NAME);
         tryDownloadFileAsBrowser(workspace, ENZYMES_LIST_URL, ENZYMES_LIST_FILE_NAME);
         tryDownloadFileAsBrowser(workspace, BRITE_LIST_URL, BRITE_LIST_FILE_NAME);
-        tryDownloadFileAsBrowser(workspace, RCLASS_LIST_URL, RCLASS_LIST_FILE_NAME);
+        tryDownloadFileAsBrowser(workspace, REACTION_RCLASS_URL, REACTION_RCLASS_FILE_NAME);
         tryDownloadFileAsBrowser(workspace, REACTION_COMPOUND_URL, REACTION_COMPOUND_FILE_NAME);
         tryDownloadFileAsBrowser(workspace, REACTION_KO_URL, REACTION_KO_FILE_NAME);
         tryDownloadFileAsBrowser(workspace, MODULE_REACTION_URL, MODULE_REACTION_FILE_NAME);
@@ -171,6 +172,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         downloadKeggEntries(workspace, REACTIONS_LIST_FILE_NAME, REACTIONS_FILE_NAME);
         downloadKeggEntries(workspace, MODULES_LIST_FILE_NAME, MODULES_FILE_NAME);
         downloadKeggEntries(workspace, PATHWAYS_LIST_FILE_NAME, PATHWAYS_FILE_NAME);
+        downloadKeggRClasses(workspace);
         // downloadKeggEntries(workspace, ORGANISMS_LIST_FILE_NAME, ORGANISMS_FILE_NAME);
         // downloadPerOrganismLinks(workspace);
         return success;
@@ -353,6 +355,47 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         }
     }
 
+    private void downloadKeggRClasses(Workspace workspace) {
+        String listFilePath = dataSource.resolveSourceFilePath(workspace, REACTION_RCLASS_FILE_NAME).toString();
+        String outputFilePath = dataSource.resolveSourceFilePath(workspace, RCLASSES_FILE_NAME).toString();
+        if (!new java.io.File(listFilePath).exists())
+            return;
+        try {
+            List<String> lines = java.nio.file.Files.readAllLines(Paths.get(listFilePath));
+            java.util.Set<String> uniqueIds = new java.util.HashSet<>();
+            for (String line : lines) {
+                String[] parts = org.apache.commons.lang3.StringUtils.split(line, '\t');
+                if (parts.length > 1) {
+                    uniqueIds.add("rc:" + parts[1].replace("rc:", "").trim());
+                }
+            }
+            List<String> ids = new ArrayList<>(uniqueIds);
+            int total = ids.size();
+            int processed = 0;
+            try (java.io.FileWriter writer = new java.io.FileWriter(outputFilePath)) {
+                for (int i = 0; i < ids.size(); i += 10) {
+                    int end = Math.min(i + 10, ids.size());
+                    String batchIds = String.join("+", ids.subList(i, end));
+                    try {
+                        String content = de.unibi.agbi.biodwh2.core.net.HTTPClient.getWebsiteSource("https://rest.kegg.jp/get/" + batchIds, 3);
+                        if (content != null) {
+                            writer.write(content);
+                        }
+                        Thread.sleep(200);
+                        processed += (end - i);
+                        if (processed % 500 == 0 || processed == total) {
+                            LOGGER.info("Processed {}/{} entries for {}", processed, total, "RClass");
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     private boolean updateFile(Workspace workspace, DataSource dataSource, AnonymousFTPClient ftpClient,
                                String filePath) throws UpdaterException {
@@ -372,7 +415,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
                 DRUG_FILE_NAME, DISEASE_FILE_NAME, NETWORK_FILE_NAME, VARIANT_FILE_NAME,
                 REACTIONS_LIST_FILE_NAME, MODULES_LIST_FILE_NAME, ORTHOLOGY_LIST_FILE_NAME,
                 PATHWAYS_LIST_FILE_NAME, ENZYMES_LIST_FILE_NAME, BRITE_LIST_FILE_NAME,
-                RCLASS_LIST_FILE_NAME,
+                REACTION_RCLASS_FILE_NAME,
                 REACTION_COMPOUND_FILE_NAME, REACTION_KO_FILE_NAME, MODULE_REACTION_FILE_NAME,
                 MODULE_KO_FILE_NAME, MODULE_COMPOUND_FILE_NAME,
                 PATHWAY_KO_FILE_NAME, PATHWAY_COMPOUND_FILE_NAME, PATHWAY_MODULE_FILE_NAME, PATHWAY_REACTION_FILE_NAME,
@@ -381,7 +424,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
                 TAXONOMY_GENOME_FILE_NAME, PATHWAY_GENOME_FILE_NAME, PATHWAY_HSA_FILE_NAME,
                 GENES_PER_ORGANISM_FILE_NAME, PATHWAY_PER_ORGANISM_FILE_NAME,
                 REACTIONS_FILE_NAME, MODULES_FILE_NAME, PATHWAYS_FILE_NAME,
-                ORGANISMS_FILE_NAME
+                RCLASSES_FILE_NAME, ORGANISMS_FILE_NAME
         };
     }
 }
