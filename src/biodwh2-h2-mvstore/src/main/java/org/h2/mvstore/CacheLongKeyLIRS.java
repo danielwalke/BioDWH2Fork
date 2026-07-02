@@ -34,10 +34,19 @@ import java.lang.ref.WeakReference;
  * @author Thomas Mueller
  */
 public class CacheLongKeyLIRS<V> {
-    /**
-     * The maximum memory this cache should use.
-     */
-    private static final long MAX_MEMORY = 16 * 1024L * 1024L;
+    private static final long MAX_MEMORY = getCacheSize();
+
+    private static long getCacheSize() {
+        final String cacheSizeProp = Utils.getProperty("biodwh2.h2.cacheSize", null);
+        if (cacheSizeProp != null) {
+            try {
+                // Parse in megabytes
+                return Long.parseLong(cacheSizeProp) * 1024L * 1024L;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return 16 * 1024L * 1024L;
+    }
 
     /**
      * The number of cache segments (must be a power of 2).
