@@ -81,23 +81,23 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
 
     private void exportEntry(final Graph graph, final Entry entry) throws ExporterException {
         final NodeBuilder builder = graph.buildNode().withLabel(PROTEIN_LABEL);
-        builder.withPropertyIfNotNull("dataset", entry.dataset);
-        builder.withPropertyIfNotNull("created", entry.created);
-        builder.withPropertyIfNotNull("modified", entry.modified);
-        builder.withPropertyIfNotNull("version", entry.version);
+        // builder.withPropertyIfNotNull("dataset", entry.dataset);
+        // builder.withPropertyIfNotNull("created", entry.created);
+        // builder.withPropertyIfNotNull("modified", entry.modified);
+        // builder.withPropertyIfNotNull("version", entry.version);
         builder.withProperty("names", entry.name.toArray(new String[0]));
         final var secondaryAccessions = entry.accession.stream().skip(1).toArray(String[]::new);
         builder.withProperty("accession", entry.accession.get(0));
         builder.withProperty("secondary_accessions", secondaryAccessions);
         if (entry.sequence != null) {
-            builder.withPropertyIfNotNull("sequence", entry.sequence.value);
-            builder.withPropertyIfNotNull("sequence_length", entry.sequence.length);
-            builder.withPropertyIfNotNull("sequence_mass", entry.sequence.mass);
-            builder.withPropertyIfNotNull("sequence_checksum", entry.sequence.checksum);
-            builder.withPropertyIfNotNull("sequence_modified", entry.sequence.modified);
-            builder.withPropertyIfNotNull("sequence_version", entry.sequence.version);
-            builder.withPropertyIfNotNull("sequence_precursor", entry.sequence.precursor);
-            builder.withPropertyIfNotNull("sequence_fragment", entry.sequence.fragment);
+            // builder.withPropertyIfNotNull("sequence", entry.sequence.value);
+            // builder.withPropertyIfNotNull("sequence_length", entry.sequence.length);
+            // builder.withPropertyIfNotNull("sequence_mass", entry.sequence.mass);
+            // builder.withPropertyIfNotNull("sequence_checksum", entry.sequence.checksum);
+            // builder.withPropertyIfNotNull("sequence_modified", entry.sequence.modified);
+            // builder.withPropertyIfNotNull("sequence_version", entry.sequence.version);
+            // builder.withPropertyIfNotNull("sequence_precursor", entry.sequence.precursor);
+            // builder.withPropertyIfNotNull("sequence_fragment", entry.sequence.fragment);
         }
         if (entry.proteinExistence != null)
             builder.withPropertyIfNotNull("existence", entry.proteinExistence.type);
@@ -259,13 +259,13 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         builder.withPropertyIfNotNull("type", citation.type);
         builder.withPropertyIfNotNull("date", citation.date);
         builder.withPropertyIfNotNull("journal", citation.name);
-        builder.withPropertyIfNotNull("publisher", citation.publisher);
+        // builder.withPropertyIfNotNull("publisher", citation.publisher);
         builder.withPropertyIfNotNull("city", citation.city);
-        builder.withPropertyIfNotNull("number", citation.number);
-        builder.withPropertyIfNotNull("institute", citation.institute);
+        // builder.withPropertyIfNotNull("number", citation.number);
+        // builder.withPropertyIfNotNull("institute", citation.institute);
         builder.withPropertyIfNotNull("locator", citation.locator);
-        builder.withPropertyIfNotNull("country", citation.country);
-        builder.withPropertyIfNotNull("volume", citation.volume);
+        // builder.withPropertyIfNotNull("country", citation.country);
+        // builder.withPropertyIfNotNull("volume", citation.volume);
         if (citation.first != null && citation.last != null)
             builder.withProperty("pages", citation.first + '-' + citation.last);
         else if (citation.first != null)
