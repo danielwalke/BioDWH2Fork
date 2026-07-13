@@ -17,7 +17,10 @@ import org.apache.logging.log4j.Logger;
 
 import javax.xml.stream.XMLStreamException;
 import java.io.File;
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
@@ -27,6 +30,8 @@ import static java.util.stream.Collectors.groupingBy;
 public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
     private static final Logger LOGGER = LogManager.getLogger(UniProtGraphExporter.class);
     private static final Map<String, Long> dbReferenceCitationNodeIdMap = new HashMap<>();
+    private static final long TOTAL_LINE_COUNT = 27_950_157_325L;
+    private static final long FIVE_PERCENT_LINE_COUNT = (TOTAL_LINE_COUNT + 19L) / 20L;
     static final String ORGANISM_LABEL = "Organism";
     static final String PROTEIN_LABEL = "Protein";
     static final String CITATION_LABEL = "Citation";
@@ -72,40 +77,168 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
             throw new ExporterException("Failed to parse the file '" + fileName + "'");
         }
 
-        try (final GZIPInputStream stream = FileUtils.openGzip(filePath.toString())) {
-            FileUtils.streamXmlList(stream, Entry.class, entry -> exportEntry(graph, entry));
+        final long heapMemoryBefore = getUsedHeapMemory();
+        final long mvStoreMemoryBefore = getMVStoreTrackedMemory(graph);
+
+        try (final GZIPInputStream gzipStream = FileUtils.openGzip(filePath.toString());
+             final LineLimitInputStream stream = new LineLimitInputStream(gzipStream, FIVE_PERCENT_LINE_COUNT)) {
+            try {
+                FileUtils.streamXmlList(stream, Entry.class, entry -> exportEntry(graph, entry));
+            } catch (IOException | XMLStreamException e) {
+                if (!stream.hasReachedLimit())
+                    throw e;
+            }
+
+            if (stream.hasReachedLimit()) {
+                printMemoryUsage(graph, fileName, stream.getLineCount(), heapMemoryBefore, mvStoreMemoryBefore);
+                throw new ExporterException(
+                        "Intentional pipeline abort after processing 5% of '" + fileName + "'"
+                );
+            }
         } catch (IOException | XMLStreamException e) {
             throw new ExporterFormatException(e);
         }
     }
 
+    private static long getUsedHeapMemory() {
+        final Runtime runtime = Runtime.getRuntime();
+        return runtime.totalMemory() - runtime.freeMemory();
+    }
+
+    private static long getMVStoreTrackedMemory(final Graph graph) {
+        try {
+            final Object database = getFieldValue(graph, "database");
+            final Object store = getFieldValue(database, "store");
+            final long unsavedMemory = ((Number) getFieldValue(store, "unsavedMemory")).longValue();
+            final Object cache = getFieldValue(store, "cache");
+            final Object[] segments = (Object[]) getFieldValue(cache, "segments");
+
+            long cacheMemory = 0;
+            for (final Object segment : segments)
+                cacheMemory += ((Number) getFieldValue(segment, "usedMemory")).longValue();
+
+            return Math.max(0L, unsavedMemory) + Math.max(0L, cacheMemory);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.warn("Failed to read H2 MVStore memory counters", e);
+            return -1L;
+        }
+    }
+
+    private static Object getFieldValue(final Object target, final String fieldName)
+            throws ReflectiveOperationException {
+        Class<?> type = target.getClass();
+        while (type != null) {
+            try {
+                final Field field = type.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field.get(target);
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(fieldName);
+    }
+
+    private static void printMemoryUsage(
+            final Graph graph,
+            final String fileName,
+            final long processedLines,
+            final long heapMemoryBefore,
+            final long mvStoreMemoryBefore
+    ) {
+        final long heapMemoryAfter = getUsedHeapMemory();
+        final long mvStoreMemoryAfter = getMVStoreTrackedMemory(graph);
+
+        LOGGER.info("Reached 5% of '{}' after {} lines", fileName, processedLines);
+        LOGGER.info("H2 MVStore tracked memory: {}",
+                    mvStoreMemoryAfter >= 0 ? formatBytes(mvStoreMemoryAfter) : "unavailable");
+        if (mvStoreMemoryBefore >= 0 && mvStoreMemoryAfter >= 0)
+            LOGGER.info("H2 MVStore tracked memory growth: {}",
+                        formatBytes(mvStoreMemoryAfter - mvStoreMemoryBefore));
+        LOGGER.info("JVM heap currently used: {}", formatBytes(heapMemoryAfter));
+        LOGGER.info("JVM heap growth during the 5% export: {}",
+                    formatBytes(heapMemoryAfter - heapMemoryBefore));
+    }
+
+    private static String formatBytes(final long bytes) {
+        return String.format(Locale.ROOT, "%.2f GiB (%,d bytes)", bytes / 1_073_741_824.0, bytes);
+    }
+
+    private static final class LineLimitInputStream extends FilterInputStream {
+        private final long lineLimit;
+        private long lineCount;
+        private boolean limitReached;
+
+        private LineLimitInputStream(final InputStream inputStream, final long lineLimit) {
+            super(inputStream);
+            this.lineLimit = lineLimit;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (limitReached)
+                return -1;
+
+            final int value = super.read();
+            if (value == '\n' && ++lineCount >= lineLimit)
+                limitReached = true;
+            return value;
+        }
+
+        @Override
+        public int read(final byte[] buffer, final int offset, final int length) throws IOException {
+            if (limitReached)
+                return -1;
+
+            final int bytesRead = super.read(buffer, offset, length);
+            if (bytesRead <= 0)
+                return bytesRead;
+
+            for (int i = offset; i < offset + bytesRead; i++) {
+                if (buffer[i] == '\n' && ++lineCount >= lineLimit) {
+                    limitReached = true;
+                    return i - offset + 1;
+                }
+            }
+            return bytesRead;
+        }
+
+        private boolean hasReachedLimit() {
+            return limitReached;
+        }
+
+        private long getLineCount() {
+            return lineCount;
+        }
+    }
+
     private void exportEntry(final Graph graph, final Entry entry) throws ExporterException {
         final NodeBuilder builder = graph.buildNode().withLabel(PROTEIN_LABEL);
-        // builder.withPropertyIfNotNull("dataset", entry.dataset);
-        // builder.withPropertyIfNotNull("created", entry.created);
-        // builder.withPropertyIfNotNull("modified", entry.modified);
-        // builder.withPropertyIfNotNull("version", entry.version);
+        //builder.withPropertyIfNotNull("dataset", entry.dataset);
+        //builder.withPropertyIfNotNull("created", entry.created);
+        //builder.withPropertyIfNotNull("modified", entry.modified);
+        //builder.withPropertyIfNotNull("version", entry.version);
         builder.withProperty("names", entry.name.toArray(new String[0]));
         final var secondaryAccessions = entry.accession.stream().skip(1).toArray(String[]::new);
         builder.withProperty("accession", entry.accession.get(0));
         builder.withProperty("secondary_accessions", secondaryAccessions);
         if (entry.sequence != null) {
-            // builder.withPropertyIfNotNull("sequence", entry.sequence.value);
-            // builder.withPropertyIfNotNull("sequence_length", entry.sequence.length);
-            // builder.withPropertyIfNotNull("sequence_mass", entry.sequence.mass);
-            // builder.withPropertyIfNotNull("sequence_checksum", entry.sequence.checksum);
-            // builder.withPropertyIfNotNull("sequence_modified", entry.sequence.modified);
-            // builder.withPropertyIfNotNull("sequence_version", entry.sequence.version);
-            // builder.withPropertyIfNotNull("sequence_precursor", entry.sequence.precursor);
-            // builder.withPropertyIfNotNull("sequence_fragment", entry.sequence.fragment);
+            builder.withPropertyIfNotNull("sequence", entry.sequence.value);
+            //builder.withPropertyIfNotNull("sequence_length", entry.sequence.length);
+            //builder.withPropertyIfNotNull("sequence_mass", entry.sequence.mass);
+            //builder.withPropertyIfNotNull("sequence_checksum", entry.sequence.checksum);
+            builder.withPropertyIfNotNull("sequence_modified", entry.sequence.modified);
+            //builder.withPropertyIfNotNull("sequence_version", entry.sequence.version);
+            builder.withPropertyIfNotNull("sequence_precursor", entry.sequence.precursor);
+            //builder.withPropertyIfNotNull("sequence_fragment", entry.sequence.fragment);
         }
-        if (entry.proteinExistence != null)
+        /*if (entry.proteinExistence != null)
             builder.withPropertyIfNotNull("existence", entry.proteinExistence.type);
         if (entry.keyword != null) {
             builder.withProperty("keywords", entry.keyword.stream().map((k) -> k.value).toArray(String[]::new));
             builder.withProperty("keyword_ids", entry.keyword.stream().map((k) -> k.id).toArray(String[]::new));
             // TODO: evidence
-
+        */ 
             /*
             for (final Keyword keyword : entry.keyword)
                 if (keyword.evidence != null && !keyword.evidence.isEmpty())   
@@ -260,24 +393,29 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         builder.withPropertyIfNotNull("date", citation.date);
         builder.withPropertyIfNotNull("journal", citation.name);
         // builder.withPropertyIfNotNull("publisher", citation.publisher);
-        builder.withPropertyIfNotNull("city", citation.city);
+        //builder.withPropertyIfNotNull("city", citation.city);
         // builder.withPropertyIfNotNull("number", citation.number);
         // builder.withPropertyIfNotNull("institute", citation.institute);
-        builder.withPropertyIfNotNull("locator", citation.locator);
+        //builder.withPropertyIfNotNull("locator", citation.locator);
         // builder.withPropertyIfNotNull("country", citation.country);
         // builder.withPropertyIfNotNull("volume", citation.volume);
+        /*
         if (citation.first != null && citation.last != null)
             builder.withProperty("pages", citation.first + '-' + citation.last);
         else if (citation.first != null)
             builder.withProperty("pages", citation.first);
         else if (citation.last != null)
             builder.withProperty("pages", citation.last);
+            */
         final String[] authors = nameListToArray(citation.authorList);
         if (authors.length > 0)
             builder.withPropertyIfNotNull("authors", authors);
+        /*
         final String[] editors = nameListToArray(citation.editorList);
+        
         if (editors.length > 0)
             builder.withPropertyIfNotNull("editors", editors);
+            
         builder.withProperty("db_references", dbReferences);
         final long nodeId = builder.build().getId();
         for (final String reference : dbReferences) {
@@ -291,7 +429,6 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
             dbReferenceCitationNodeIdMap.put(reference, nodeId);
         }
         return nodeId;
-    }
 
     private String[] nameListToArray(final NameList list) {
         final List<String> names = new ArrayList<>();
@@ -303,5 +440,5 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         }
         return names.toArray(new String[0]);
     }
-}
+
 
