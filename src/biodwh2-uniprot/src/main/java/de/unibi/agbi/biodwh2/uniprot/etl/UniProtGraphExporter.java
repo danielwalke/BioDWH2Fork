@@ -24,9 +24,11 @@ import java.util.zip.GZIPInputStream;
 /* 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+
 import java.io.UncheckedIOException;
 import java.util.concurrent.atomic.AtomicLong;
-*/
+*/ 
+
 import static java.util.stream.Collectors.groupingBy;
 
 
@@ -42,14 +44,13 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         super(dataSource);
     }
 
-    /*
+/*
     private static final class LimitReachedException extends RuntimeException {
     private LimitReachedException() {
         super("1% limit reached");
     }
     }
-    */
-
+*/
     @Override
     public long getExportVersion() {
         return 2;
@@ -154,36 +155,40 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
                     "Failed to parse the file '" + fileName + "'"
             );
         }
-        /*
+        /* 
         try {
             totalEntries = getEntryCount(filePath);
         } catch (IOException e) {
             throw new ExporterFormatException(e);
         }
         */
-        //final long totalEntries = 149_234_636L;
-        //final long limit = Math.round(totalEntries * 0.1d);
-        //final AtomicLong count = new AtomicLong();
-
+/* 
+        final long totalEntries = 149_234_636L;
+        final long limit = Math.round(totalEntries * 0.01d);
+        final AtomicLong count = new AtomicLong();
+*/
         try (final GZIPInputStream stream =
                 FileUtils.openGzip(filePath.toString())) {
-            //LOGGER.info( "Total number Entries '{}'", totalEntries);
+            LOGGER.info( "Start streaming without features and citations for TrEMBL (100%)");
             FileUtils.streamXmlList( stream, Entry.class, entry -> {
                              exportEntry(graph, entry);
                         /*
                         final long processed = count.incrementAndGet();
-
+                        
                         if (processed > limit) {
                             throw new LimitReachedException();
-                        }
-                        */  
+                        }*/
+                    
                     }
             );
 
-        } /* catch (LimitReachedException e) {
+        }  
+        /*
+        catch (LimitReachedException e) {
             // Expected termination after exporting the requested number of entries.
             System.out.println(e.getMessage());
-        } */ 
+    
+        } */
         catch (IOException | XMLStreamException e) {
             throw new ExporterFormatException(e);
         }
@@ -281,14 +286,18 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         for (final Reference reference : entry.reference) {
             final String[] scopes = reference.scope != null ? reference.scope.toArray(new String[0]) : new String[0];
             final int refKey = Integer.parseInt(reference.key);
-            final var referenceNode = graph.addNode("Reference", "key", refKey, "scopes", scopes);
-            referenceKeyNodeIdMap.put(refKey, referenceNode.getId());
+            //final var referenceNode = graph.addNode("Reference", "key", refKey, "scopes", scopes);     
             // TODO: reference.source
             // TODO: reference.evidence
             final long citationNodeId = getOrCreateCitation(graph, reference.citation);
+            referenceKeyNodeIdMap.put(refKey, citationNodeId);
+            /*
             graph.addEdge(node, referenceNode, "REFERENCES");
             graph.addEdge(referenceNode, citationNodeId, "REFERENCES");
+            */
+            graph.addEdge(node,citationNodeId,"REFERENCES","key", refKey, "scopes", scopes,"evidence", reference.evidence); //"source", reference.source
         }
+    /* 
         if (entry.feature != null) {
             for (final var feature : entry.feature) {
                 // TODO:
@@ -327,6 +336,7 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
                 }
             }
         }
+    */
         graph.addEdge(node, getOrCreateOrganism(graph, entry.organism), "BELONGS_TO");
     }
 
