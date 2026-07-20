@@ -21,8 +21,14 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
-
+/* 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
+import java.util.concurrent.atomic.AtomicLong;
+*/
 import static java.util.stream.Collectors.groupingBy;
+
 
 public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
     private static final Logger LOGGER = LogManager.getLogger(UniProtGraphExporter.class);
@@ -31,14 +37,25 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
     static final String PROTEIN_LABEL = "Protein";
     static final String CITATION_LABEL = "Citation";
 
+
     public UniProtGraphExporter(final UniProtDataSource dataSource) {
         super(dataSource);
     }
+
+    /*
+    private static final class LimitReachedException extends RuntimeException {
+    private LimitReachedException() {
+        super("1% limit reached");
+    }
+    }
+    */
 
     @Override
     public long getExportVersion() {
         return 2;
     }
+
+    
 
     @Override
     protected boolean exportGraph(final Workspace workspace, final Graph graph)
@@ -57,7 +74,71 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         
 
         return true;
+}
+
+/*
+    
+    private long getEntryCount(final File filePath) throws IOException {
+    long count = 0;
+    try (GZIPInputStream stream = FileUtils.openGzip(filePath.toString());
+         BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (line.contains("</entry>")) {
+                count++;
+            }
+        }
     }
+    return count;
+}
+
+    private void exportUniProtFile(
+            final Workspace workspace,
+            final Graph graph,
+            final String fileName
+    ) throws ExporterException {
+        LOGGER.info("Starting UniProt XML export for '{}'", fileName);
+
+        final File filePath =
+                dataSource.resolveSourceFilePath(workspace, fileName).toFile();
+
+        if (!filePath.exists()) {
+            throw new ExporterException(
+                    "Failed to parse the file '" + fileName + "'"
+            );
+        }
+
+        final long totalEntries = getEntryCount(filePath);
+        System.out.println(totalEntries);
+        final long limit  = Math.round(totalEntries / 100.0);
+        final AtomicLong count = new AtomicLong();
+
+        try (final GZIPInputStream stream =
+            FileUtils.openGzip(filePath.toString())) {
+
+                FileUtils.streamXmlList(
+                    stream,
+                    Entry.class,
+                    entry -> {
+                        final long processed = count.incrementAndGet();
+
+                        if (processed > limit) {
+                            throw new LimitReachedException();
+                        }
+
+                        exportEntry(graph, entry);
+                    }
+        );
+
+    }   catch (LimitReachedException e) {
+        // Expected termination after exporting the requested number of entries.
+        System.out.println(e.getMessage());
+
+    }   catch (IOException | XMLStreamException e) {
+        throw new ExporterFormatException(e);
+    }
+}
+*/
 
     private void exportUniProtFile(
             final Workspace workspace,
@@ -69,12 +150,41 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         final File filePath = dataSource.resolveSourceFilePath(workspace, fileName).toFile();
 
         if (!filePath.exists()) {
-            throw new ExporterException("Failed to parse the file '" + fileName + "'");
+            throw new ExporterException(
+                    "Failed to parse the file '" + fileName + "'"
+            );
         }
+        /*
+        try {
+            totalEntries = getEntryCount(filePath);
+        } catch (IOException e) {
+            throw new ExporterFormatException(e);
+        }
+        */
+        //final long totalEntries = 149_234_636L;
+        //final long limit = Math.round(totalEntries * 0.1d);
+        //final AtomicLong count = new AtomicLong();
 
-        try (final GZIPInputStream stream = FileUtils.openGzip(filePath.toString())) {
-            FileUtils.streamXmlList(stream, Entry.class, entry -> exportEntry(graph, entry));
-        } catch (IOException | XMLStreamException e) {
+        try (final GZIPInputStream stream =
+                FileUtils.openGzip(filePath.toString())) {
+            //LOGGER.info( "Total number Entries '{}'", totalEntries);
+            FileUtils.streamXmlList( stream, Entry.class, entry -> {
+                             exportEntry(graph, entry);
+                        /*
+                        final long processed = count.incrementAndGet();
+
+                        if (processed > limit) {
+                            throw new LimitReachedException();
+                        }
+                        */  
+                    }
+            );
+
+        } /* catch (LimitReachedException e) {
+            // Expected termination after exporting the requested number of entries.
+            System.out.println(e.getMessage());
+        } */ 
+        catch (IOException | XMLStreamException e) {
             throw new ExporterFormatException(e);
         }
     }
@@ -90,13 +200,13 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         builder.withProperty("accession", entry.accession.get(0));
         builder.withProperty("secondary_accessions", secondaryAccessions);
         if (entry.sequence != null) {
-            // builder.withPropertyIfNotNull("sequence", entry.sequence.value);
+            builder.withPropertyIfNotNull("sequence", entry.sequence.value);
             // builder.withPropertyIfNotNull("sequence_length", entry.sequence.length);
             // builder.withPropertyIfNotNull("sequence_mass", entry.sequence.mass);
             // builder.withPropertyIfNotNull("sequence_checksum", entry.sequence.checksum);
-            // builder.withPropertyIfNotNull("sequence_modified", entry.sequence.modified);
+            builder.withPropertyIfNotNull("sequence_modified", entry.sequence.modified);
             // builder.withPropertyIfNotNull("sequence_version", entry.sequence.version);
-            // builder.withPropertyIfNotNull("sequence_precursor", entry.sequence.precursor);
+            builder.withPropertyIfNotNull("sequence_precursor", entry.sequence.precursor);
             // builder.withPropertyIfNotNull("sequence_fragment", entry.sequence.fragment);
         }
         if (entry.proteinExistence != null)
