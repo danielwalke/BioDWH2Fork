@@ -7,7 +7,7 @@ set -euo pipefail
 BIO_DWH2_HOME="/home/benjamin.reyes/BioDWH2/BioDWH2Fork"
 POM_FILE="$BIO_DWH2_HOME/src/pom.xml"
 
-NEW_VERSION="${1:-0.68_KG1_V2}"
+NEW_VERSION="${1:-0.68_UniProt}"
 
 echo "Using BioDWH2 version: $NEW_VERSION"
 

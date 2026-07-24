@@ -31,3 +31,4 @@ dependency-reduced-pom.xml
 .ipynb_checkpoints/
 .DS_Store
 workspace
+uniprot_100%_workspace
