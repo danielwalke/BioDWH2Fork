@@ -19,15 +19,16 @@ import javax.xml.stream.XMLStreamException;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 /* 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-
+*/ 
 import java.io.UncheckedIOException;
 import java.util.concurrent.atomic.AtomicLong;
-*/ 
+
 
 import static java.util.stream.Collectors.groupingBy;
 
@@ -44,13 +45,13 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
         super(dataSource);
     }
 
-/*
+
     private static final class LimitReachedException extends RuntimeException {
     private LimitReachedException() {
-        super("1% limit reached");
+        super("progress increased by 1%");
     }
     }
-*/
+
     @Override
     public long getExportVersion() {
         return 2;
@@ -162,34 +163,61 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
             throw new ExporterFormatException(e);
         }
         */
-/* 
         final long totalEntries = 149_234_636L;
-        final long limit = Math.round(totalEntries * 0.01d);
+        final long onePercentSteps= totalEntries /100L;
         final AtomicLong count = new AtomicLong();
-*/
+
+        /*
+        final long limit = Math.round(totalEntries * 0.01d);
+        */
+
+        final AtomicLong entriesCounter = new AtomicLong(0);
+        final AtomicLong progressCounter = new AtomicLong(0);
+
         try (final GZIPInputStream stream =
                 FileUtils.openGzip(filePath.toString())) {
-            LOGGER.info( "Start streaming without features and citations for TrEMBL (100%)");
-            FileUtils.streamXmlList( stream, Entry.class, entry -> {
-                             exportEntry(graph, entry);
-                        /*
-                        final long processed = count.incrementAndGet();
-                        
-                        if (processed > limit) {
-                            throw new LimitReachedException();
-                        }*/
-                    
-                    }
+
+            LOGGER.info(
+                "Start streaming without features and citations for TrEMBL (0%)"
             );
 
-        }  
-        /*
-        catch (LimitReachedException e) {
+            FileUtils.streamXmlList(stream, Entry.class, entry -> {
+                exportEntry(graph, entry);
+
+                final long processed = count.incrementAndGet();
+                final long entriesSinceLastUpdate =
+                    entriesCounter.incrementAndGet();
+
+                if (entriesSinceLastUpdate >= onePercentSteps) {
+                    final long progress =
+                        progressCounter.incrementAndGet();
+
+                    entriesCounter.set(0);
+
+                    LOGGER.info(
+                        "Progress at {}% ({} entries processed)",
+                        progress,
+                        processed
+                    );
+                }
+
+                /*
+                * Keep this exception inside an actual limit condition.
+                * Otherwise, processing stops after the first entry.
+                *
+                * Example:
+                *
+                * if (processed >= entryLimit) {
+                *     throw new LimitReachedException();
+                * }
+                */
+            });
+
+        } catch (LimitReachedException e) {
             // Expected termination after exporting the requested number of entries.
-            System.out.println(e.getMessage());
-    
-        } */
-        catch (IOException | XMLStreamException e) {
+            LOGGER.info(e.getMessage());
+
+        } catch (IOException | XMLStreamException e) {
             throw new ExporterFormatException(e);
         }
     }
