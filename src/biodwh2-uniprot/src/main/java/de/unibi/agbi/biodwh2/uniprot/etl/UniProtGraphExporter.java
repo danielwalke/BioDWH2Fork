@@ -71,7 +71,7 @@ public class UniProtGraphExporter extends GraphExporter<UniProtDataSource> {
             IndexDescription.Type.UNIQUE
         ));
 
-        //exportUniProtFile(workspace, graph, UniProtUpdater.TREMBL_FILE_NAME);
+        exportUniProtFile(workspace, graph, UniProtUpdater.TREMBL_FILE_NAME);
         exportUniProtFile(workspace, graph, UniProtUpdater.SPROT_FILE_NAME);
         
 
