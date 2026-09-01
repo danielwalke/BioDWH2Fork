@@ -244,6 +244,7 @@ public abstract class DataSource {
     public Map<String, DataSourcePropertyType> getAvailableProperties() {
         final Map<String, DataSourcePropertyType> result = new HashMap<>();
         result.put("forceExport", DataSourcePropertyType.BOOLEAN);
+        result.put("skipExport", DataSourcePropertyType.BOOLEAN);
         return result;
     }
 

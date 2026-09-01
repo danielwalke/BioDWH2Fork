@@ -239,14 +239,19 @@ public final class Workspace extends BaseWorkspace {
                     dataSource.export(this);
                 }
             } else if (LOGGER.isInfoEnabled())
-                LOGGER.info("Skipping export of data source '{}' because nothing changed", dataSource.getId());
+                LOGGER.info("Skipping export of data source '{}' because {}", dataSource.getId(),
+                            isDataSourceExportSkipped(dataSource) ? "skipExport is enabled" : "nothing changed");
         }
         if (LOGGER.isInfoEnabled())
             LOGGER.info("Processing of data source '{}' finished", dataSource.getId());
     }
 
     private boolean isDataSourceExportNeeded(final Updater.UpdateState updateState, final DataSource dataSource) {
-        if (updateState == Updater.UpdateState.UPDATED || isDataSourceExportForced(dataSource))
+        if (isDataSourceExportForced(dataSource))
+            return true;
+        if (isDataSourceExportSkipped(dataSource))
+            return false;
+        if (updateState == Updater.UpdateState.UPDATED)
             return true;
         final DataSourceMetadata metadata = dataSource.getMetadata();
         return metadata.exportSuccessful == null || !metadata.exportSuccessful || areDataSourceExportsMissing(
@@ -256,6 +261,10 @@ public final class Workspace extends BaseWorkspace {
 
     public boolean isDataSourceExportForced(final DataSource dataSource) {
         return dataSource.getBooleanProperty(this, "forceExport", false);
+    }
+
+    public boolean isDataSourceExportSkipped(final DataSource dataSource) {
+        return dataSource.getBooleanProperty(this, "skipExport", false);
     }
 
     private boolean areDataSourceExportsMissing(final DataSource dataSource) {
