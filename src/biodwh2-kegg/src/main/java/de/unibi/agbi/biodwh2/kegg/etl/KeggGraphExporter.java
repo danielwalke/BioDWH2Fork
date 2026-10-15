@@ -46,11 +46,36 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
 
     @Override
     public long getExportVersion() {
-        return 13;
+        return 14;
+    }
+
+    /**
+     * Positions of reactions/compounds/KOs in the KEGG module and pathway diagrams, stored on the edges to the
+     * modules/pathways (see {@link KeggLayout}).
+     */
+    private KeggLayout layout = KeggLayout.empty();
+
+    private void loadLayout(final Workspace workspace) {
+        try {
+            layout = KeggLayout.load(dataSource.resolveSourceFilePath(workspace, KeggUpdater.MODULE_LAYOUT_FILE_NAME),
+                                     dataSource.resolveSourceFilePath(workspace,
+                                                                      KeggUpdater.PATHWAY_LAYOUT_FILE_NAME));
+        } catch (IOException e) {
+            LOGGER.warn("Failed to load module/pathway layout, edges will have no coordinates", e);
+        }
+    }
+
+    private static Map<String, Object> mergeProperties(final Map<String, Object> layoutProperties,
+                                                       final Object... keyValuePairs) {
+        final Map<String, Object> properties = new HashMap<>(layoutProperties);
+        for (int i = 0; i + 1 < keyValuePairs.length; i += 2)
+            properties.put((String) keyValuePairs[i], keyValuePairs[i + 1]);
+        return properties;
     }
 
     @Override
     protected boolean exportGraph(final Workspace workspace, final Graph graph) {
+        loadLayout(workspace);
         graph.addIndex(IndexDescription.forNode(GENE_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(DRUG_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(VARIANT_LABEL, "id", IndexDescription.Type.UNIQUE));
@@ -284,7 +309,9 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                                 for (String reactionId : reactions) {
                                     de.unibi.agbi.biodwh2.core.model.graph.Node reactionNode = graph.findNode(REACTION_LABEL, "id", reactionId.trim());
                                     if (reactionNode != null) {
-                                        graph.addEdge(moduleNode, reactionNode, "ASSOCIATED_WITH_REACTION", "order", currentOrder);
+                                        graph.addEdge(moduleNode, reactionNode, "ASSOCIATED_WITH_REACTION", mergeProperties(
+                                                layout.getModuleProperties(currentModule, KeggLayoutParser.IMAGE_REACTION,
+                                                                           reactionId.trim()), "order", currentOrder));
                                     }
                                 }
                                 if (parts.length > 1) {
@@ -294,7 +321,9 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                                         for (String singleCompoundId : org.apache.commons.lang3.StringUtils.splitByWholeSeparator(compoundId, " + ")) {
                                             de.unibi.agbi.biodwh2.core.model.graph.Node compoundNode = graph.findNode(COMPOUND_LABEL, "id", singleCompoundId.trim());
                                             if (compoundNode != null) {
-                                                graph.addEdge(moduleNode, compoundNode, "ASSOCIATED_WITH_COMPOUND", "order", compOrder);
+                                                graph.addEdge(moduleNode, compoundNode, "ASSOCIATED_WITH_COMPOUND", mergeProperties(
+                                                        layout.getModuleProperties(currentModule, KeggLayoutParser.IMAGE_REACTION,
+                                                                                   singleCompoundId.trim()), "order", compOrder));
                                             }
                                         }
                                         compOrder++;
@@ -477,11 +506,19 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
     private void exportLinks(Workspace workspace, Graph graph) {
         exportLinkTSV(workspace, graph, KeggUpdater.REACTION_COMPOUND_FILE_NAME, REACTION_LABEL, COMPOUND_LABEL, "ASSOCIATED_WITH_COMPOUND");
         exportLinkTSV(workspace, graph, KeggUpdater.REACTION_KO_FILE_NAME, REACTION_LABEL, PROTEIN_LABEL, "ASSOCIATED_WITH_PROTEIN");
-        exportLinkTSV(workspace, graph, KeggUpdater.MODULE_REACTION_FILE_NAME, MODULE_LABEL, REACTION_LABEL, "ASSOCIATED_WITH_REACTION");
-        exportLinkTSV(workspace, graph, KeggUpdater.MODULE_KO_FILE_NAME, MODULE_LABEL, PROTEIN_LABEL, "ASSOCIATED_WITH_PROTEIN");
-        exportLinkTSV(workspace, graph, KeggUpdater.MODULE_COMPOUND_FILE_NAME, MODULE_LABEL, COMPOUND_LABEL, "ASSOCIATED_WITH_COMPOUND");
-        exportLinkTSV(workspace, graph, KeggUpdater.PATHWAY_KO_FILE_NAME, PROTEIN_LABEL, PATHWAY_LABEL, "ASSOCIATED_WITH_PATHWAY");
-        exportLinkTSV(workspace, graph, KeggUpdater.PATHWAY_COMPOUND_FILE_NAME, COMPOUND_LABEL, PATHWAY_LABEL, "ASSOCIATED_WITH_PATHWAY");
+        // Edges to modules/pathways carry the element position (x, y, width, height arrays) in the KEGG diagram
+        exportLinkTSV(workspace, graph, KeggUpdater.MODULE_REACTION_FILE_NAME, MODULE_LABEL, REACTION_LABEL, "ASSOCIATED_WITH_REACTION",
+                      (module, reaction) -> layout.getModuleProperties(module, KeggLayoutParser.IMAGE_REACTION, reaction));
+        exportLinkTSV(workspace, graph, KeggUpdater.MODULE_KO_FILE_NAME, MODULE_LABEL, PROTEIN_LABEL, "ASSOCIATED_WITH_PROTEIN",
+                      (module, ko) -> layout.getModuleProperties(module, KeggLayoutParser.IMAGE_KO, ko));
+        exportLinkTSV(workspace, graph, KeggUpdater.MODULE_COMPOUND_FILE_NAME, MODULE_LABEL, COMPOUND_LABEL, "ASSOCIATED_WITH_COMPOUND",
+                      (module, compound) -> layout.getModuleProperties(module, KeggLayoutParser.IMAGE_REACTION, compound));
+        exportLinkTSV(workspace, graph, KeggUpdater.PATHWAY_KO_FILE_NAME, PROTEIN_LABEL, PATHWAY_LABEL, "ASSOCIATED_WITH_PATHWAY",
+                      (ko, pathway) -> layout.getPathwayProperties(pathway, ko));
+        exportLinkTSV(workspace, graph, KeggUpdater.PATHWAY_COMPOUND_FILE_NAME, COMPOUND_LABEL, PATHWAY_LABEL, "ASSOCIATED_WITH_PATHWAY",
+                      (compound, pathway) -> layout.getPathwayProperties(pathway, compound));
+        exportLinkTSV(workspace, graph, KeggUpdater.PATHWAY_REACTION_FILE_NAME, REACTION_LABEL, PATHWAY_LABEL, "ASSOCIATED_WITH_PATHWAY",
+                      (reaction, pathway) -> layout.getPathwayProperties(pathway, reaction));
         exportLinkTSV(workspace, graph, KeggUpdater.PATHWAY_MODULE_FILE_NAME, MODULE_LABEL, PATHWAY_LABEL, "ASSOCIATED_WITH_PATHWAY");
         exportDiseaseDrugLinks(workspace, graph);
         exportDiseaseHsaLinks(workspace, graph);
@@ -612,6 +649,14 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
     }
 
     private void exportLinkTSV(Workspace workspace, Graph graph, String fileName, String label1, String label2, String edgeLabel) {
+        exportLinkTSV(workspace, graph, fileName, label1, label2, edgeLabel, null);
+    }
+
+    /**
+     * @param edgeProperties provides additional edge properties for the (id1, id2) pair, may be null
+     */
+    private void exportLinkTSV(Workspace workspace, Graph graph, String fileName, String label1, String label2, String edgeLabel,
+                               java.util.function.BiFunction<String, String, Map<String, Object>> edgeProperties) {
         for (final String[] row : openTSV(workspace, fileName)) {
             if (row != null && row.length == 2) {
                 String id1 = null;
@@ -624,7 +669,10 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                     Node node1 = graph.findNode(label1, "id", id1);
                     Node node2 = graph.findNode(label2, "id", id2);
                     if (node1 != null && node2 != null) {
-                        graph.addEdge(node1, node2, edgeLabel);
+                        if (edgeProperties == null)
+                            graph.addEdge(node1, node2, edgeLabel);
+                        else
+                            graph.addEdge(node1, node2, edgeLabel, edgeProperties.apply(id1, id2));
                     }
                 }
             }
@@ -1291,7 +1339,8 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
         for (final NameIdsPair compound : pathway.compounds) {
             final Node compoundNode = findEntry(graph, compound.ids);
             if (compoundNode != null)
-                graph.addEdge(node, compoundNode, "ASSOCIATED_WITH_COMPOUND");
+                graph.addEdge(node, compoundNode, "ASSOCIATED_WITH_COMPOUND",
+                              layout.getPathwayProperties(pathway.id, compoundNode.getProperty("id")));
         }
     }
 }

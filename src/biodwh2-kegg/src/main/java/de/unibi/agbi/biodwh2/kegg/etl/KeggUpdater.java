@@ -11,11 +11,17 @@ import de.unibi.agbi.biodwh2.kegg.KeggDataSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import de.unibi.agbi.biodwh2.core.net.HTTPClient;
+
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class KeggUpdater extends Updater<KeggDataSource> {
     private static final Logger LOGGER = LogManager.getLogger(KeggUpdater.class);
@@ -96,6 +102,13 @@ public class KeggUpdater extends Updater<KeggDataSource> {
     static final String PATHWAYS_FILE_NAME = "pathways.txt";
     static final String RCLASSES_FILE_NAME = "rclasses.txt";
     static final String ORGANISMS_FILE_NAME = "organisms.txt";
+    // Element positions in the KEGG diagrams (see KeggLayoutParser for the row formats)
+    private static final String MODULE_PAGE_URL = "https://www.kegg.jp/module/";
+    private static final String PATHWAY_KGML_URL = "https://rest.kegg.jp/get/ko%s/kgml";
+    static final String MODULE_LAYOUT_FILE_NAME = "module_layout.tsv";
+    static final String PATHWAY_LAYOUT_FILE_NAME = "pathway_layout.tsv";
+    private static final String BROWSER_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+    private static final long LAYOUT_REQUEST_DELAY_MS = 200;
 
     public KeggUpdater(KeggDataSource dataSource) {
         super(dataSource);
@@ -173,9 +186,95 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         downloadKeggEntries(workspace, MODULES_LIST_FILE_NAME, MODULES_FILE_NAME);
         downloadKeggEntries(workspace, PATHWAYS_LIST_FILE_NAME, PATHWAYS_FILE_NAME);
         downloadKeggRClasses(workspace);
+        downloadModuleLayouts(workspace);
+        downloadPathwayLayouts(workspace);
         // downloadKeggEntries(workspace, ORGANISMS_LIST_FILE_NAME, ORGANISMS_FILE_NAME);
         // downloadPerOrganismLinks(workspace);
         return success;
+    }
+
+    /**
+     * Downloads every module page (browser user agent required, otherwise KEGG omits the diagram) and writes the
+     * positions from its image maps to module_layout.tsv: module_id, image (ko|reaction), element_id, x, y, width,
+     * height.
+     */
+    private void downloadModuleLayouts(final Workspace workspace) {
+        final var listPath = dataSource.resolveSourceFilePath(workspace, MODULES_LIST_FILE_NAME);
+        final var outPath = dataSource.resolveSourceFilePath(workspace, MODULE_LAYOUT_FILE_NAME);
+        final List<String> moduleIds = readFirstColumn(listPath);
+        final Map<String, String> headers = Map.of("User-Agent", BROWSER_USER_AGENT);
+        int failed = 0;
+        try (BufferedWriter writer = Files.newBufferedWriter(outPath, StandardCharsets.UTF_8)) {
+            for (final String moduleId : moduleIds) {
+                try {
+                    final String html = HTTPClient.getWebsiteSource(MODULE_PAGE_URL + moduleId, null, null, 3, headers);
+                    final List<String[]> rows = KeggLayoutParser.parseModuleImageMaps(html);
+                    if (rows.isEmpty())
+                        failed++;
+                    for (final String[] row : rows)
+                        writer.write(moduleId + "\t" + String.join("\t", row) + "\n");
+                    Thread.sleep(LAYOUT_REQUEST_DELAY_MS);
+                } catch (IOException e) {
+                    failed++;
+                    LOGGER.warn("Failed to download layout of module {}", moduleId, e);
+                }
+            }
+        } catch (IOException | InterruptedException e) {
+            LOGGER.warn("Failed to write " + MODULE_LAYOUT_FILE_NAME, e);
+        }
+        LOGGER.info("Module layouts downloaded for {}/{} modules", moduleIds.size() - failed, moduleIds.size());
+    }
+
+    /**
+     * Downloads the KGML of the reference (ko) layout of every pathway and writes the entry positions to
+     * pathway_layout.tsv: pathway_id (mapXXXXX), entry_type, names, reactions, x, y, width, height. Some overview
+     * pathways have no KGML and are skipped.
+     */
+    private void downloadPathwayLayouts(final Workspace workspace) {
+        final var listPath = dataSource.resolveSourceFilePath(workspace, PATHWAYS_LIST_FILE_NAME);
+        final var outPath = dataSource.resolveSourceFilePath(workspace, PATHWAY_LAYOUT_FILE_NAME);
+        final List<String> pathwayIds = readFirstColumn(listPath);
+        int missing = 0;
+        try (BufferedWriter writer = Files.newBufferedWriter(outPath, StandardCharsets.UTF_8)) {
+            for (final String pathwayId : pathwayIds) {
+                final String number = pathwayId.replaceAll("[^0-9]", "");
+                try {
+                    final String kgml = HTTPClient.getWebsiteSource(String.format(PATHWAY_KGML_URL, number), 1);
+                    for (final String[] row : KeggLayoutParser.parseKgml(kgml))
+                        writer.write(pathwayId + "\t" + String.join("\t", row) + "\n");
+                } catch (IOException e) {
+                    missing++; // HTTP 404: no KGML for this pathway
+                } catch (Exception e) {
+                    missing++;
+                    LOGGER.warn("Failed to parse KGML of pathway {}", pathwayId, e);
+                }
+                try {
+                    Thread.sleep(LAYOUT_REQUEST_DELAY_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.warn("Failed to write " + PATHWAY_LAYOUT_FILE_NAME, e);
+        }
+        LOGGER.info("Pathway layouts downloaded for {}/{} pathways", pathwayIds.size() - missing, pathwayIds.size());
+    }
+
+    private List<String> readFirstColumn(final java.nio.file.Path path) {
+        final List<String> ids = new ArrayList<>();
+        if (!Files.exists(path))
+            return ids;
+        try {
+            for (final String line : Files.readAllLines(path, StandardCharsets.UTF_8)) {
+                final String id = line.split("\t")[0].trim();
+                if (!id.isEmpty())
+                    ids.add(id);
+            }
+        } catch (IOException e) {
+            LOGGER.warn("Failed to read " + path, e);
+        }
+        return ids;
     }
 
     private void tryDownloadFileAsBrowser(final Workspace workspace, final String url, final String fileName) {
@@ -424,7 +523,7 @@ public class KeggUpdater extends Updater<KeggDataSource> {
                 TAXONOMY_GENOME_FILE_NAME, PATHWAY_GENOME_FILE_NAME, PATHWAY_HSA_FILE_NAME,
                 GENES_PER_ORGANISM_FILE_NAME, PATHWAY_PER_ORGANISM_FILE_NAME,
                 REACTIONS_FILE_NAME, MODULES_FILE_NAME, PATHWAYS_FILE_NAME,
-                RCLASSES_FILE_NAME, ORGANISMS_FILE_NAME
+                RCLASSES_FILE_NAME, ORGANISMS_FILE_NAME, MODULE_LAYOUT_FILE_NAME, PATHWAY_LAYOUT_FILE_NAME
         };
     }
 }
