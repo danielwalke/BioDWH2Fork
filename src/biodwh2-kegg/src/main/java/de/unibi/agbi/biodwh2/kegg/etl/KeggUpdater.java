@@ -116,7 +116,13 @@ public class KeggUpdater extends Updater<KeggDataSource> {
 
     @Override
     public Version getNewestVersion(final Workspace workspace) throws UpdaterException {
-        AnonymousFTPClient ftpClient = connectToFTP();
+        AnonymousFTPClient ftpClient;
+        try {
+            ftpClient = connectToFTP();
+        } catch (UpdaterConnectionException e) {
+            LOGGER.warn("KEGG FTP unavailable, using the current date as version", e);
+            return convertDateTimeToVersion(LocalDateTime.now());
+        }
         List<LocalDateTime> folderDateTimes = new ArrayList<>();
         folderDateTimes.add(ftpClient.getModificationTimeFromServer(FTP_BASE_PATH + "dgroup/dgroup"));
         folderDateTimes.add(ftpClient.getModificationTimeFromServer(FTP_BASE_PATH + "disease/disease"));
@@ -148,12 +154,18 @@ public class KeggUpdater extends Updater<KeggDataSource> {
 
     @Override
     protected boolean tryUpdateFiles(Workspace workspace) throws UpdaterException {
-        AnonymousFTPClient ftpClient = connectToFTP();
-        boolean success = updateFile(workspace, dataSource, ftpClient, "dgroup/" + DGROUP_FILE_NAME);
-        success = success && updateFile(workspace, dataSource, ftpClient, "disease/" + DISEASE_FILE_NAME);
-        success = success && updateFile(workspace, dataSource, ftpClient, "drug/" + DRUG_FILE_NAME);
-        success = success && updateFile(workspace, dataSource, ftpClient, "network/" + NETWORK_FILE_NAME);
-        success = success && updateFile(workspace, dataSource, ftpClient, "network/" + VARIANT_FILE_NAME);
+        boolean success;
+        try {
+            AnonymousFTPClient ftpClient = connectToFTP();
+            success = updateFile(workspace, dataSource, ftpClient, "dgroup/" + DGROUP_FILE_NAME);
+            success = success && updateFile(workspace, dataSource, ftpClient, "disease/" + DISEASE_FILE_NAME);
+            success = success && updateFile(workspace, dataSource, ftpClient, "drug/" + DRUG_FILE_NAME);
+            success = success && updateFile(workspace, dataSource, ftpClient, "network/" + NETWORK_FILE_NAME);
+            success = success && updateFile(workspace, dataSource, ftpClient, "network/" + VARIANT_FILE_NAME);
+        } catch (UpdaterException e) {
+            LOGGER.warn("KEGG FTP unavailable, downloading dgroup/disease/drug/network/variant via HTTPS", e);
+            success = downloadMedicusFilesViaRest(workspace);
+        }
         tryDownloadFileAsBrowser(workspace, HUMAN_GENES_LIST_URL, HUMAN_GENES_LIST_FILE_NAME);
         tryDownloadFileAsBrowser(workspace, COMPOUNDS_LIST_URL, COMPOUNDS_LIST_FILE_NAME);
         tryDownloadFileAsBrowser(workspace, ORGANISMS_LIST_URL, ORGANISMS_LIST_FILE_NAME);
@@ -452,6 +464,27 @@ public class KeggUpdater extends Updater<KeggDataSource> {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * HTTPS replacement for the KEGG MEDICUS FTP files. The REST `get` endpoint returns the same flat-file entries.
+     */
+    private boolean downloadMedicusFilesViaRest(final Workspace workspace) {
+        final String[] names = {DGROUP_FILE_NAME, DISEASE_FILE_NAME, DRUG_FILE_NAME, NETWORK_FILE_NAME,
+                                VARIANT_FILE_NAME};
+        boolean success = true;
+        for (final String name : names) {
+            final String listFileName = name + "_list.tsv";
+            try {
+                downloadFileAsBrowser(workspace, "https://rest.kegg.jp/list/" + name, listFileName);
+            } catch (UpdaterException e) {
+                LOGGER.warn("Failed to download KEGG list for " + name, e);
+                success = false;
+                continue;
+            }
+            downloadKeggEntries(workspace, listFileName, name);
+        }
+        return success;
     }
 
     private void downloadKeggRClasses(Workspace workspace) {
