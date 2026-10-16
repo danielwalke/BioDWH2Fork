@@ -482,9 +482,26 @@ public class KeggUpdater extends Updater<KeggDataSource> {
                 success = false;
                 continue;
             }
+            if (VARIANT_FILE_NAME.equals(name))
+                prefixListIds(workspace, listFileName, "hsa_var:");
             downloadKeggEntries(workspace, listFileName, name);
         }
         return success;
+    }
+
+    /**
+     * KEGG's batched `get` endpoint rejects bare variant ids (HTTP 400); they need the `hsa_var:` database prefix.
+     */
+    private void prefixListIds(final Workspace workspace, final String listFileName, final String prefix) {
+        final var path = dataSource.resolveSourceFilePath(workspace, listFileName);
+        try {
+            final List<String> lines = new ArrayList<>();
+            for (final String line : Files.readAllLines(path))
+                lines.add(line.startsWith(prefix) || line.isEmpty() ? line : prefix + line);
+            Files.write(path, lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            LOGGER.warn("Failed to prefix ids in " + listFileName, e);
+        }
     }
 
     private void downloadKeggRClasses(Workspace workspace) {
