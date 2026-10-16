@@ -46,7 +46,19 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
 
     @Override
     public long getExportVersion() {
-        return 14;
+        return 15;
+    }
+
+    /**
+     * Link edges (label, from, to) that were already created. Module edges are created from modules.txt (with an
+     * order) and again from the link files; the link file edge is skipped if the pair is already connected. This also
+     * drops pairs that KEGG lists twice in a link file.
+     */
+    private final Set<String> createdLinkEdges = new HashSet<>();
+    private final Set<String> createdModuleCompoundOrders = new HashSet<>();
+
+    private static String linkEdgeKey(final String label, final long fromId, final long toId) {
+        return label + '|' + fromId + '|' + toId;
     }
 
     /**
@@ -75,6 +87,8 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
 
     @Override
     protected boolean exportGraph(final Workspace workspace, final Graph graph) {
+        createdLinkEdges.clear();
+        createdModuleCompoundOrders.clear();
         loadLayout(workspace);
         graph.addIndex(IndexDescription.forNode(GENE_LABEL, "id", IndexDescription.Type.UNIQUE));
         graph.addIndex(IndexDescription.forNode(DRUG_LABEL, "id", IndexDescription.Type.UNIQUE));
@@ -312,6 +326,7 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                                         graph.addEdge(moduleNode, reactionNode, "ASSOCIATED_WITH_REACTION", mergeProperties(
                                                 layout.getModuleProperties(currentModule, KeggLayoutParser.IMAGE_REACTION,
                                                                            reactionId.trim()), "order", currentOrder));
+                                        createdLinkEdges.add(linkEdgeKey("ASSOCIATED_WITH_REACTION", moduleNode.getId(), reactionNode.getId()));
                                     }
                                 }
                                 if (parts.length > 1) {
@@ -320,10 +335,14 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                                     for (String compoundId : compounds) {
                                         for (String singleCompoundId : org.apache.commons.lang3.StringUtils.splitByWholeSeparator(compoundId, " + ")) {
                                             de.unibi.agbi.biodwh2.core.model.graph.Node compoundNode = graph.findNode(COMPOUND_LABEL, "id", singleCompoundId.trim());
-                                            if (compoundNode != null) {
+                                            // a compound that is the product of one step and the substrate of the next gets the
+                                            // same order twice, only keep one of these identical edges
+                                            if (compoundNode != null && createdModuleCompoundOrders.add(
+                                                    moduleNode.getId() + "|" + compoundNode.getId() + "|" + compOrder)) {
                                                 graph.addEdge(moduleNode, compoundNode, "ASSOCIATED_WITH_COMPOUND", mergeProperties(
                                                         layout.getModuleProperties(currentModule, KeggLayoutParser.IMAGE_REACTION,
                                                                                    singleCompoundId.trim()), "order", compOrder));
+                                                createdLinkEdges.add(linkEdgeKey("ASSOCIATED_WITH_COMPOUND", moduleNode.getId(), compoundNode.getId()));
                                             }
                                         }
                                         compOrder++;
@@ -669,6 +688,8 @@ public class KeggGraphExporter extends GraphExporter<KeggDataSource> {
                     Node node1 = graph.findNode(label1, "id", id1);
                     Node node2 = graph.findNode(label2, "id", id2);
                     if (node1 != null && node2 != null) {
+                        if (!createdLinkEdges.add(linkEdgeKey(edgeLabel, node1.getId(), node2.getId())))
+                            continue;
                         if (edgeProperties == null)
                             graph.addEdge(node1, node2, edgeLabel);
                         else

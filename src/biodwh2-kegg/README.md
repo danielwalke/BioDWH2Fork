@@ -19,14 +19,14 @@ can appear several times). Edges whose element is not drawn simply have no such 
 
 | Edge | Coordinates from | Edges with coordinates |
 |---|---|---|
-| Module → Reaction (`ASSOCIATED_WITH_REACTION`) | module reaction image | 6,393 of 6,425 (~100%) |
-| Module → Compound (`ASSOCIATED_WITH_COMPOUND`) | module reaction image | 9,664 of 9,667 (~100%) |
-| Module → Protein/KO (`ASSOCIATED_WITH_PROTEIN`) | module KO image | 4,308 of 4,308 (100%) |
-| Protein/KO → Pathway (`ASSOCIATED_WITH_PATHWAY`) | pathway KGML | 38,154 of 49,071 (78%) |
+| Module → Reaction (`ASSOCIATED_WITH_REACTION`) | module reaction image | 3,211 of 3,243 (99%) |
+| Module → Compound (`ASSOCIATED_WITH_COMPOUND`) | module reaction image | 3,934 of 3,937 (~100%) |
+| Module → Protein/KO (`ASSOCIATED_WITH_PROTEIN`) | module KO image | 4,234 of 4,234 (100%) |
+| Protein/KO → Pathway (`ASSOCIATED_WITH_PATHWAY`) | pathway KGML | 38,154 of 49,070 (78%) |
 | Compound → Pathway (`ASSOCIATED_WITH_PATHWAY`) | pathway KGML | 18,857 of 19,693 (96%) |
 | Reaction → Pathway (`ASSOCIATED_WITH_PATHWAY`) | pathway KGML | 7,233 of 19,922 (36%) |
 
-Counts are from the export of 2026-10-13 (KEGG version 2026.10.13.160830).
+Counts are from an export of KEGG version 2026.10.13.160830.
 
 **Edges without coordinates**
 
@@ -55,16 +55,22 @@ properties, and `KeggGraphExporter` attaches them.
 
 ## Parallel edges
 
-The graph can contain several edges between the same two nodes. This is existing behaviour and was not changed:
+Module edges used to be created twice (see below). The exporter now creates **one edge per (module, element)
+pair**, with these exceptions that carry different information:
 
-- **Module → Reaction / Compound**: the edge is created twice, once from `modules.txt` (with an `order` property) and
-  once from the `link/module/...` files (without `order`). Both copies carry the same coordinates. A compound that is
-  the product of one reaction and the substrate of the next has one `modules.txt` edge per occurrence, each with its
-  own `order`.
-- **Module → Protein**: KEGG's `link/module/ko` itself lists some pairs twice (e.g. `K00331` in `M00144`). Both edges
-  are identical.
+- A reaction or compound that occurs at several steps of a module keeps one edge per step, each with its own `order`
+  (`modules.txt` edges, 5 Module → Reaction and 288 Module → Compound pairs).
+- A compound that is the product of one step and the substrate of the next gets the same `order` twice; only one
+  edge is kept.
 
-Filter on `order` or deduplicate by (source, target) if you need one edge per pair.
+How it works: edges from `modules.txt` (with `order`) are created first. The link files (`link/module/...`) are
+exported afterwards and skip pairs that are already connected. Link-file edges are only kept for pairs that
+`modules.txt` does not produce (61 Module → Reaction and 71 Module → Compound pairs, and all Module → Protein
+pairs), and these have no `order`. The skip applies to every link file, so pairs that KEGG itself lists twice
+(e.g. `K00331` in `M00144`) are exported once as well.
+
+History: the link-file edges came first (commit `2a49d82a`), the `modules.txt` edges with `order` were added two
+days later (`64d9487f`) without guarding the earlier path, which produced the duplicates.
 
 ## Known issues
 
